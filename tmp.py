@@ -3,6 +3,21 @@ AI Schedule Agent - Intelligent Personal Scheduling Assistant
 A comprehensive scheduling agent that integrates with Google Calendar and learns from user patterns
 """
 
+# Check Python version before importing anything else
+import sys
+
+MIN_PYTHON = (3, 9)
+MAX_PYTHON = (3, 12)
+
+if sys.version_info < MIN_PYTHON:
+    sys.exit(f"Error: Python {MIN_PYTHON[0]}.{MIN_PYTHON[1]} or higher is required. "
+             f"You are using Python {sys.version_info.major}.{sys.version_info.minor}")
+
+if sys.version_info[:2] > MAX_PYTHON:
+    print(f"Warning: This application was tested with Python up to {MAX_PYTHON[0]}.{MAX_PYTHON[1]}. "
+          f"You are using Python {sys.version_info.major}.{sys.version_info.minor}. "
+          f"If you encounter issues, consider using Python {MAX_PYTHON[0]}.{MAX_PYTHON[1]}")
+
 import os
 import json
 import pickle
@@ -41,12 +56,153 @@ import numpy as np
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
 
-# Setup logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+# Configuration Manager
+class ConfigManager:
+    """Centralized configuration management"""
+
+    _instance = None
+    _config_dir = '.config'
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(ConfigManager, cls).__new__(cls)
+            cls._instance._initialized = False
+        return cls._instance
+
+    def __init__(self):
+        if self._initialized:
+            return
+
+        self._initialized = True
+        self.config_dir = self._config_dir
+
+        # Ensure config directory exists
+        os.makedirs(self.config_dir, exist_ok=True)
+
+        # Auto-setup config files from templates if needed
+        self._auto_setup_config_files()
+
+        # Load configuration files
+        self.paths = self._load_json('paths.json')
+        self.settings = self._load_json('settings.json')
+
+        # Create necessary directories
+        self._ensure_directories()
+
+    def _auto_setup_config_files(self):
+        """Auto-copy .example files to actual config files if they don't exist"""
+        config_templates = {
+            'paths.json': 'paths.json.example',
+            'settings.json': 'settings.json.example'
+        }
+
+        setup_needed = False
+        for config_file, template_file in config_templates.items():
+            config_path = os.path.join(self.config_dir, config_file)
+            template_path = os.path.join(self.config_dir, template_file)
+
+            if not os.path.exists(config_path) and os.path.exists(template_path):
+                try:
+                    import shutil
+                    shutil.copy(template_path, config_path)
+                    print(f"✓ Created {config_file} from template")
+                    setup_needed = True
+                except Exception as e:
+                    print(f"Warning: Could not create {config_file}: {e}")
+
+        if setup_needed:
+            print("\n⚠ Configuration files created from templates.")
+            print("  Please edit .config/credentials.json with your Google API credentials.")
+            print("  See .config/README.md for instructions.\n")
+
+    def _load_json(self, filename):
+        """Load JSON configuration file"""
+        filepath = os.path.join(self.config_dir, filename)
+        try:
+            with open(filepath, 'r') as f:
+                return json.load(f)
+        except FileNotFoundError:
+            template_path = filepath + '.example'
+            if os.path.exists(template_path):
+                print(f"\n⚠ Configuration file {filepath} not found!")
+                print(f"  Run: ./setup_config.sh")
+                print(f"  Or manually copy: {template_path} → {filepath}\n")
+            else:
+                print(f"Warning: Configuration file {filepath} not found. Using defaults.")
+            return {}
+        except json.JSONDecodeError as e:
+            print(f"Error: Failed to parse {filepath}: {e}")
+            return {}
+
+    def _ensure_directories(self):
+        """Create necessary directories if they don't exist"""
+        dirs_to_create = [
+            self.get_path('data_directory'),
+            self.get_path('logs_directory'),
+            self.config_dir
+        ]
+
+        for dir_path in dirs_to_create:
+            if dir_path and not os.path.exists(dir_path):
+                os.makedirs(dir_path, exist_ok=True)
+
+    def get_path(self, key, default=None):
+        """Get a path from paths.json"""
+        return self.paths.get(key, default)
+
+    def get_setting(self, *keys, default=None):
+        """Get a setting from settings.json using dot notation
+        Example: get_setting('google_calendar', 'timezone')
+        """
+        value = self.settings
+        for key in keys:
+            if isinstance(value, dict):
+                value = value.get(key)
+            else:
+                return default
+            if value is None:
+                return default
+        return value if value is not None else default
+
+    def update_setting(self, value, *keys):
+        """Update a setting and save to file"""
+        current = self.settings
+        for key in keys[:-1]:
+            if key not in current:
+                current[key] = {}
+            current = current[key]
+        current[keys[-1]] = value
+
+        # Save to file
+        filepath = os.path.join(self.config_dir, 'settings.json')
+        with open(filepath, 'w') as f:
+            json.dump(self.settings, f, indent=2)
+
+# Initialize global config
+config = ConfigManager()
+
+# Setup logging with config
+log_level = getattr(logging, config.get_setting('logging', 'level', default='INFO'))
+log_format = config.get_setting('logging', 'format', default='%(asctime)s - %(levelname)s - %(message)s')
+
+# Configure file logging if enabled
+if config.get_setting('logging', 'file_enabled', default=True):
+    log_file = os.path.join(config.get_path('logs_directory', '.config/logs'), 'app.log')
+    logging.basicConfig(
+        level=log_level,
+        format=log_format,
+        handlers=[
+            logging.FileHandler(log_file),
+            logging.StreamHandler()
+        ]
+    )
+else:
+    logging.basicConfig(level=log_level, format=log_format)
+
 logger = logging.getLogger(__name__)
 
-# Google Calendar API scope
-SCOPES = ['https://www.googleapis.com/auth/calendar']
+# Google Calendar API scope from config
+SCOPES = config.get_setting('google_calendar', 'scopes', default=['https://www.googleapis.com/auth/calendar'])
 
 # Event Types Enumeration
 class EventType(Enum):
@@ -204,25 +360,34 @@ class CalendarIntegration:
     def authenticate(self):
         """Authenticate with Google Calendar"""
         creds = None
-        
+
+        # Get paths from config
+        token_file = config.get_path('token_file', 'token.pickle')
+        credentials_file = config.get_path('google_credentials', 'credentials.json')
+
         # Token file stores the user's access and refresh tokens
-        if os.path.exists('token.pickle'):
-            with open('token.pickle', 'rb') as token:
+        if os.path.exists(token_file):
+            with open(token_file, 'rb') as token:
                 creds = pickle.load(token)
-        
+
         # If there are no (valid) credentials available, let the user log in
         if not creds or not creds.valid:
             if creds and creds.expired and creds.refresh_token:
                 creds.refresh(Request())
             else:
+                if not os.path.exists(credentials_file):
+                    raise FileNotFoundError(
+                        f"Google credentials file not found at {credentials_file}. "
+                        f"Please follow the setup instructions in .config/README.md"
+                    )
                 flow = InstalledAppFlow.from_client_secrets_file(
-                    'credentials.json', SCOPES)
+                    credentials_file, SCOPES)
                 creds = flow.run_local_server(port=0)
-            
+
             # Save credentials for next run
-            with open('token.pickle', 'wb') as token:
+            with open(token_file, 'wb') as token:
                 pickle.dump(creds, token)
-        
+
         self.credentials = creds
         self.service = build('calendar', 'v3', credentials=creds)
         
@@ -314,14 +479,16 @@ class CalendarIntegration:
 
 class NLPProcessor:
     """Natural Language Processing for scheduling requests"""
-    
+
     def __init__(self):
+        # Get spacy model from config
+        spacy_model = config.get_setting('nlp', 'spacy_model', default='en_core_web_sm')
         try:
-            self.nlp = spacy.load("en_core_web_sm")
+            self.nlp = spacy.load(spacy_model)
         except:
             # If spacy model not installed, use basic parsing
             self.nlp = None
-            logger.warning("Spacy model not found. Using basic NLP parsing.")
+            logger.warning(f"Spacy model '{spacy_model}' not found. Using basic NLP parsing.")
     
     def parse_scheduling_request(self, text: str) -> Dict:
         """Parse natural language scheduling request"""
@@ -537,23 +704,37 @@ class SchedulingEngine:
 
 class NotificationManager:
     """Handle notifications and reminders"""
-    
+
     def __init__(self, user_email: str = None):
         self.user_email = user_email
         self.notification_queue = queue.Queue()
-        self.smtp_server = None
-        self.smtp_port = 587
-        self.smtp_username = None
-        self.smtp_password = None
-        
+
+        # Load SMTP settings from config
+        self.smtp_server = config.get_setting('smtp', 'server')
+        self.smtp_port = config.get_setting('smtp', 'port', default=587)
+        self.smtp_username = config.get_setting('smtp', 'username')
+        self.smtp_password = config.get_setting('smtp', 'password')
+
+        # Load notification settings
+        self.desktop_enabled = config.get_setting('notifications', 'desktop_enabled', default=True)
+        self.email_enabled = config.get_setting('notifications', 'email_enabled', default=False)
+
     def setup_email(self, smtp_server: str, smtp_username: str, smtp_password: str):
-        """Setup email configuration"""
+        """Setup email configuration and save to config"""
         self.smtp_server = smtp_server
         self.smtp_username = smtp_username
         self.smtp_password = smtp_password
+
+        # Update config
+        config.update_setting(smtp_server, 'smtp', 'server')
+        config.update_setting(smtp_username, 'smtp', 'username')
+        config.update_setting(smtp_password, 'smtp', 'password')
     
     def send_desktop_notification(self, title: str, message: str):
         """Send desktop notification"""
+        if not self.desktop_enabled:
+            return
+
         try:
             notification.notify(
                 title=title,
@@ -566,6 +747,9 @@ class NotificationManager:
     
     def send_email_notification(self, subject: str, body: str, recipient: str = None):
         """Send email notification"""
+        if not self.email_enabled:
+            return False
+
         if not self.smtp_server or not self.smtp_username or not self.smtp_password:
             logger.warning("Email not configured")
             return False
@@ -593,13 +777,20 @@ class NotificationManager:
             logger.error(f"Failed to send email: {e}")
             return False
     
-    def schedule_reminder(self, event: Event, advance_notice_minutes: int):
+    def schedule_reminder(self, event: Event, advance_notice_minutes: int = None):
         """Schedule a reminder for an event"""
         if not event.start_time:
             return
-        
+
+        # Get reminder times from config if not specified
+        if advance_notice_minutes is None:
+            if event.priority in [Priority.HIGH, Priority.CRITICAL]:
+                advance_notice_minutes = config.get_setting('notifications', 'high_priority_reminder_minutes', default=30)
+            else:
+                advance_notice_minutes = config.get_setting('notifications', 'default_reminder_minutes', default=15)
+
         reminder_time = event.start_time - timedelta(minutes=advance_notice_minutes)
-        
+
         # Calculate importance-based reminder frequency
         if event.priority == Priority.CRITICAL:
             reminder_intervals = [60, 30, 15, 5]  # Multiple reminders
@@ -607,7 +798,7 @@ class NotificationManager:
             reminder_intervals = [30, 10]
         else:
             reminder_intervals = [advance_notice_minutes]
-        
+
         for interval in reminder_intervals:
             self.notification_queue.put({
                 'time': event.start_time - timedelta(minutes=interval),
@@ -620,8 +811,13 @@ class SchedulerUI:
     
     def __init__(self):
         self.root = tk.Tk()
-        self.root.title("AI Schedule Agent")
-        self.root.geometry("1200x800")
+        # Get window title and size from config
+        app_name = config.get_setting('app_name', default='AI Schedule Agent')
+        window_width = config.get_setting('ui', 'window_width', default=1200)
+        window_height = config.get_setting('ui', 'window_height', default=800)
+
+        self.root.title(app_name)
+        self.root.geometry(f"{window_width}x{window_height}")
         
         # Initialize components
         self.user_profile = self.load_or_create_profile()
@@ -638,8 +834,8 @@ class SchedulerUI:
     
     def load_or_create_profile(self) -> UserProfile:
         """Load existing profile or create new one"""
-        profile_file = 'user_profile.json'
-        
+        profile_file = config.get_path('user_profile', '.config/user_profile.json')
+
         if os.path.exists(profile_file):
             with open(profile_file, 'r') as f:
                 data = json.load(f)
@@ -662,7 +858,8 @@ class SchedulerUI:
     
     def save_profile(self):
         """Save user profile to file"""
-        with open('user_profile.json', 'w') as f:
+        profile_file = config.get_path('user_profile', '.config/user_profile.json')
+        with open(profile_file, 'w') as f:
             json.dump(self.user_profile.to_dict(), f, indent=2, default=str)
     
     def setup_ui(self):
@@ -1718,16 +1915,17 @@ Once you have the credentials.json file ready:"""
     def test_google_connection(self):
         """Test Google Calendar connection"""
         try:
-            if not os.path.exists('credentials.json'):
-                messagebox.showerror("Error", "credentials.json not found in application directory")
+            credentials_file = config.get_path('google_credentials', '.config/credentials.json')
+            if not os.path.exists(credentials_file):
+                messagebox.showerror("Error", f"credentials.json not found at {credentials_file}")
                 return
-            
+
             calendar = CalendarIntegration()
             calendar.authenticate()
-            
+
             self.google_status.config(text="Status: Connected successfully!", foreground='green')
             messagebox.showinfo("Success", "Google Calendar connected successfully!")
-            
+
         except Exception as e:
             self.google_status.config(text=f"Status: Connection failed", foreground='red')
             messagebox.showerror("Error", f"Failed to connect: {str(e)}")
@@ -1786,7 +1984,8 @@ Once you have the credentials.json file ready:"""
                 self.user_profile.behavioral_rules = rules
             
             # Save profile
-            with open('user_profile.json', 'w') as f:
+            profile_file = config.get_path('user_profile', '.config/user_profile.json')
+            with open(profile_file, 'w') as f:
                 json.dump(self.user_profile.to_dict(), f, indent=2, default=str)
             
             messagebox.showinfo("Success", "Setup completed! Starting AI Schedule Agent...")
@@ -1809,7 +2008,8 @@ Once you have the credentials.json file ready:"""
 # Main entry point
 if __name__ == "__main__":
     # Check if this is first run
-    if not os.path.exists('user_profile.json'):
+    profile_file = config.get_path('user_profile', '.config/user_profile.json')
+    if not os.path.exists(profile_file):
         # Run setup wizard
         wizard = SetupWizard()
         wizard.run()

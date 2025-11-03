@@ -1,0 +1,7 @@
+{
+  "google_credentials": ".config/credentials.json",
+  "token_file": ".config/token.pickle",
+  "user_profile": ".config/user_profile.json",
+  "data_directory": ".config/data",
+  "logs_directory": ".config/logs"
+}
