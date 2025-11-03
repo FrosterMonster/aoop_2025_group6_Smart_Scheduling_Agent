@@ -126,63 +126,93 @@ def find_free_slots_between(start_dt: datetime, end_dt: datetime, busy_periods: 
 
 def plan_week_schedule(summary: str, total_hours: float, calendar_id: str = 'primary',
                        week_start: datetime | None = None, chunk_hours: float = 2.0,
-                       daily_window: tuple = (9, 18)) -> list:
+                       daily_window: tuple = (9, 18), max_weeks: int = 4) -> list:
     """Plan a weekly schedule for `summary` totaling `total_hours` hours.
 
     - week_start: datetime for the week start (Monday). If None, use next Monday.
     - chunk_hours: preferred chunk size in hours (e.g., 2.0)
     - daily_window: tuple(start_hour, end_hour) in local time to consider for scheduling.
+    - max_weeks: maximum number of weeks to look ahead for free slots.
 
     Returns list of created event results (or DRY_RUN messages).
     """
     tz = pytz.timezone(TIMEZONE)
     now = datetime.now(tz)
+    # 如果沒指定開始週，從今天開始找
     if week_start is None:
-        # compute next Monday (or current week's Monday if today is Monday)
-        days_ahead = (0 - now.weekday()) % 7
-        week_start = (now + timedelta(days=days_ahead)).replace(hour=0, minute=0, second=0, microsecond=0)
+        week_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     else:
         week_start = week_start.astimezone(tz).replace(hour=0, minute=0, second=0, microsecond=0)
 
-    # build candidate windows for the week (each day between week_start and week_start+7)
-    candidate_windows = []
-    for d in range(7):
-        day = week_start + timedelta(days=d)
-        start_dt = day.replace(hour=daily_window[0], minute=0, second=0, microsecond=0)
-        end_dt = day.replace(hour=daily_window[1], minute=0, second=0, microsecond=0)
-        candidate_windows.append((start_dt, end_dt))
-
-    # Query busy periods over whole week
-    overall_start = candidate_windows[0][0]
-    overall_end = candidate_windows[-1][1]
-    busy_periods = get_busy_periods(calendar_id, overall_start, overall_end)
-
-    # Find free slots per day intersection
-    min_chunk = int(chunk_hours * 60)
     planned = []
+    current_week_start = week_start
+    weeks_tried = 0
     hours_left = total_hours
 
-    for day_start, day_end in candidate_windows:
-        if hours_left <= 0:
-            break
-        frees = find_free_slots_between(day_start, day_end, busy_periods, min_duration_minutes=30)
-        # try to allocate chunks in this day's frees
-        for fs, fe in frees:
+    # 持續找空檔直到排滿或超過最大週數
+    while hours_left > 0 and weeks_tried < max_weeks:
+        # 建立這週的時間視窗（每天的 daily_window 區間）
+        candidate_windows = []
+        for d in range(7):
+            day = current_week_start + timedelta(days=d)
+            # 跳過已經過去的時段
+            if day < now:
+                continue
+            start_dt = day.replace(hour=daily_window[0], minute=0, second=0, microsecond=0)
+            end_dt = day.replace(hour=daily_window[1], minute=0, second=0, microsecond=0)
+            candidate_windows.append((start_dt, end_dt))
+
+        if not candidate_windows:
+            # 這週沒有可用時段，試下週
+            current_week_start += timedelta(days=7)
+            weeks_tried += 1
+            continue
+
+        # 查詢這週的忙碌時段
+        overall_start = candidate_windows[0][0]
+        overall_end = candidate_windows[-1][1]
+        busy_periods = get_busy_periods(calendar_id, overall_start, overall_end)
+
+        # 在這週的空閒時段中嘗試排程
+        min_chunk = int(chunk_hours * 60)
+        hours_left = total_hours - sum((p['end'] - p['start']).total_seconds() / 3600 for p in planned)
+
+        for day_start, day_end in candidate_windows:
             if hours_left <= 0:
                 break
-            slot_minutes = int((fe - fs).total_seconds() // 60)
-            # create sub-chunks of size chunk_hours until filled or slot exhausted
-            cur = fs
-            while slot_minutes >= min_chunk and hours_left > 0:
-                take_minutes = min(min_chunk, slot_minutes, int(hours_left * 60))
-                end_take = cur + timedelta(minutes=take_minutes)
-                # schedule event
-                res = create_calendar_event(summary, '自動排程', cur.strftime('%Y-%m-%d %H:%M:%S'), end_take.strftime('%Y-%m-%d %H:%M:%S'), calendar_id=calendar_id)
-                planned.append({'start': cur, 'end': end_take, 'result': res})
-                # advance
-                hours_left -= take_minutes / 60.0
-                cur = end_take
-                slot_minutes = int((fe - cur).total_seconds() // 60)
+            frees = find_free_slots_between(day_start, day_end, busy_periods, min_duration_minutes=30)
+            
+            # 在這天的空檔中嘗試安排
+            for fs, fe in frees:
+                if hours_left <= 0:
+                    break
+                slot_minutes = int((fe - fs).total_seconds() // 60)
+                # 在這個空檔中建立固定大小的時段直到填滿或空檔用完
+                cur = fs
+                while slot_minutes >= min_chunk and hours_left > 0:
+                    take_minutes = min(min_chunk, slot_minutes, int(hours_left * 60))
+                    end_take = cur + timedelta(minutes=take_minutes)
+                    # 建立活動
+                    res = create_calendar_event(
+                        summary, 
+                        '自動排程 (總時數目標: {:.1f}h)'.format(total_hours),
+                        cur.strftime('%Y-%m-%d %H:%M:%S'), 
+                        end_take.strftime('%Y-%m-%d %H:%M:%S'), 
+                        calendar_id=calendar_id
+                    )
+                    planned.append({'start': cur, 'end': end_take, 'result': res})
+                    # 前進到下一個位置
+                    hours_left -= take_minutes / 60.0
+                    cur = end_take
+                    slot_minutes = int((fe - cur).total_seconds() // 60)
+
+        # 如果這週沒排完，往下週找
+        if hours_left > 0:
+            current_week_start += timedelta(days=7)
+            weeks_tried += 1
+        else:
+            break
+
     return planned
 
 # 獨立測試區塊
