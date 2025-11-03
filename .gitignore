@@ -1,1 +1,45 @@
+# Old credentials file (deprecated - now using .config/)
+credentials.json
+token.pickle
+user_profile.json
 
+# Configuration directory - User-specific settings
+.config/credentials.json
+.config/token.pickle
+.config/user_profile.json
+.config/paths.json
+.config/settings.json
+.config/logs/
+.config/data/
+
+# Allow template/example files to be committed (for team sharing)
+!.config/*.example
+!.config/*.template
+!.config/README.md
+!.config/data/.gitkeep
+!.config/logs/.gitkeep
+
+# Python virtual environment (NEVER commit these!)
+# Each user must create their own venv with: python -m venv venv
+venv/
+env/
+.venv/
+Include/
+Lib/
+Scripts/
+pyvenv.cfg
+pip-selfcheck.json
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
