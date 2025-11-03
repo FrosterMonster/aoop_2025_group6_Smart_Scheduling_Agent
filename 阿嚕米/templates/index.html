@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智慧排程助手</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { padding-top: 60px; }
+        .jumbotron { 
+            padding: 2rem;
+            margin-bottom: 2rem;
+            background-color: #e9ecef;
+            border-radius: .3rem;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-md navbar-dark bg-dark fixed-top">
+        <div class="container">
+            <a class="navbar-brand" href="/">智慧排程助手</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    {% if is_logged_in %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="/schedule">排程</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/logout">登出</a>
+                    </li>
+                    {% else %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="/login">Google 登入</a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <main class="container">
+        <div class="jumbotron">
+            <h1 class="display-4">歡迎使用智慧排程助手</h1>
+            <p class="lead">讓 AI 幫你安排最適合的讀書時間！</p>
+            {% if not is_logged_in %}
+            <hr class="my-4">
+            <p>請先使用 Google 帳戶登入以開始使用。</p>
+            <a class="btn btn-primary btn-lg" href="/login" role="button">Google 登入</a>
+            {% else %}
+            <hr class="my-4">
+            <p>你已登入！現在可以開始安排你的讀書計畫。</p>
+            <a class="btn btn-success btn-lg" href="/schedule" role="button">開始排程</a>
+            {% endif %}
+        </div>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
