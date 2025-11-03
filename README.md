@@ -86,7 +86,7 @@ Only `.example` and `.template` files are shared via git.
 .
 ├── setup.sh                # Complete setup script (run this first!)
 ├── run.sh                  # Run the application
-├── tmp.py                  # Main application code
+├── main.py                 # Main application code
 ├── requirements.txt        # Python dependencies
 │
 ├── .config/                # Configuration (user-specific, git-ignored)

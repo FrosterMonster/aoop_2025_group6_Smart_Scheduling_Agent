@@ -242,7 +242,7 @@ Your `.config/credentials.json` contains sensitive Google API keys. It's in `.gi
 
 ### ⚠️ Always Use ./run.sh
 
-Don't run `python tmp.py` directly. Always use:
+Don't run `python main.py` directly. Always use:
 ```bash
 ./run.sh
 ```
