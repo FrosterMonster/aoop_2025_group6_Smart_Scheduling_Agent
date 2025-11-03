@@ -1,0 +1,6 @@
+.env
+token.pickle
+credentials.json
+*.pickle
+*.pem
+*.key
