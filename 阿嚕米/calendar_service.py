@@ -4,8 +4,11 @@ from google.auth.transport.requests import Request
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 
-# 授權範圍：允許應用程式對日曆事件進行讀取和寫入
-SCOPES = ['https://www.googleapis.com/auth/calendar.events']
+# 授權範圍：允許應用程式對日曆事件進行讀取和寫入，以及查詢空閒/忙碌時段
+SCOPES = [
+    'https://www.googleapis.com/auth/calendar.events',  # 讀寫事件
+    'https://www.googleapis.com/auth/calendar.freebusy'  # 查詢空閒/忙碌
+]
 TOKEN_FILE = 'token.pickle'
 CREDS_FILE = 'credentials.json'
 
