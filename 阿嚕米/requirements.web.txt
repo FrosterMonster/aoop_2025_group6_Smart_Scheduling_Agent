@@ -1,0 +1,3 @@
+# 新增的依賴套件
+flask
+gunicorn  # 生產環境 web 伺服器
