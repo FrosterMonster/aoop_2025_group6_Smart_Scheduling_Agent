@@ -1,0 +1,12 @@
+2025-11-03 21:31:15 INFO agent [agent_main.py:52]: Loaded .env (if present)
+2025-11-03 21:31:15 INFO agent [agent_main.py:53]: OPENAI_API_KEY present: True
+2025-11-03 21:31:15 INFO agent [agent_main.py:54]: GEMINI_API_KEY present: True
+2025-11-03 21:31:15 INFO agent [agent_main.py:55]: DRY_RUN=1
+2025-11-03 21:31:15 INFO agent [agent_main.py:56]: credentials.json exists: True
+2025-11-03 21:31:15 INFO agent [agent_main.py:57]: token.pickle exists: True
+2025-11-03 21:31:26 ERROR agent [agent_main.py:311]: 與 OpenAI API 通信時發生錯誤: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}
+2025-11-03 21:31:26 INFO agent [agent_main.py:312]: 轉用 Mock 模式...
+2025-11-03 21:31:26 INFO agent [agent_main.py:327]: Mock extracted summary='與導師會面'
+2025-11-03 21:31:28 INFO agent [agent_main.py:370]: Mock calling create_calendar_event: summary=與導師會面 start=2025-11-03 20:00:00 end=2025-11-03 21:00:00
+2025-11-03 21:31:28 INFO agent [calendar_tools.py:29]: DRY_RUN active - not creating event: summary=與導師會面 start=2025-11-03 20:00:00 end=2025-11-03 21:00:00 calendar=primary
+2025-11-03 21:31:28 INFO agent [agent_main.py:372]: Mock create_calendar_event result: DRY_RUN: would create event '與導師會面' from 2025-11-03 20:00:00 to 2025-11-03 21:00:00 on calendar primary
