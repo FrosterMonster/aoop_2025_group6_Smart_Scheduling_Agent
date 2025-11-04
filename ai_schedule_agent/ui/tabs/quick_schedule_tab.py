@@ -30,7 +30,10 @@ class QuickScheduleTab:
         self.nl_input.pack(pady=5)
         self.nl_input.bind('<Return>', lambda e: self.process_nl_input())
 
-        ttk.Button(self.parent, text="Process", command=self.process_nl_input).pack(pady=5)
+        nl_button_frame = ttk.Frame(self.parent)
+        nl_button_frame.pack(pady=5)
+        ttk.Button(nl_button_frame, text="Process & Fill Form", command=self.process_nl_input).pack(side='left', padx=5)
+        ttk.Button(nl_button_frame, text="Clear", command=self.clear_nl_input).pack(side='left', padx=5)
 
         # Separator
         ttk.Separator(self.parent, orient='horizontal').pack(fill='x', pady=20)
@@ -85,16 +88,21 @@ class QuickScheduleTab:
         self.tags_entry = ttk.Entry(form_frame, width=40)
         self.tags_entry.grid(row=len(fields)+3, column=1, padx=5, pady=3)
 
-        # Submit button
-        ttk.Button(form_frame, text="Schedule Event",
-                  command=self.schedule_event_from_form).grid(row=len(fields)+4, column=0, columnspan=2, pady=20)
+        # Submit and Clear buttons
+        button_frame = ttk.Frame(form_frame)
+        button_frame.grid(row=len(fields)+4, column=0, columnspan=2, pady=20)
+
+        ttk.Button(button_frame, text="Schedule Event",
+                  command=self.schedule_event_from_form).pack(side='left', padx=5)
+        ttk.Button(button_frame, text="Clear Form",
+                  command=self.clear_form).pack(side='left', padx=5)
 
         # Result display
         self.result_text = scrolledtext.ScrolledText(self.parent, height=8, width=80)
         self.result_text.pack(pady=10)
 
     def process_nl_input(self):
-        """Process natural language input"""
+        """Process natural language input and populate the form"""
         text = self.nl_input.get()
         if not text:
             return
@@ -106,52 +114,126 @@ class QuickScheduleTab:
 
         # Display parsed information
         self.result_text.delete(1.0, tk.END)
-        self.result_text.insert(tk.END, "Parsed Information:\n")
-        self.result_text.insert(tk.END, "-" * 50 + "\n")
+        self.result_text.insert(tk.END, "✅ Parsed Natural Language Input\n")
+        self.result_text.insert(tk.END, "=" * 60 + "\n\n")
 
-        for key, value in parsed.items():
-            if value:
-                self.result_text.insert(tk.END, f"{key.title()}: {value}\n")
+        # Display parsed fields in a nicer format
+        if parsed.get('title'):
+            self.result_text.insert(tk.END, f"  📌 Title: {parsed['title']}\n")
+        if parsed.get('datetime'):
+            self.result_text.insert(tk.END, f"  📅 Date/Time: {parsed['datetime'].strftime('%Y-%m-%d %H:%M')}\n")
+        if parsed.get('duration'):
+            self.result_text.insert(tk.END, f"  ⏱️  Duration: {parsed['duration']} minutes\n")
+        if parsed.get('location'):
+            self.result_text.insert(tk.END, f"  📍 Location: {parsed['location']}\n")
+        if parsed.get('participants'):
+            self.result_text.insert(tk.END, f"  👥 Participants: {', '.join(parsed['participants'])}\n")
+        if parsed.get('event_type'):
+            event_type_str = parsed['event_type'].value if hasattr(parsed['event_type'], 'value') else str(parsed['event_type'])
+            self.result_text.insert(tk.END, f"  🏷️  Type: {event_type_str}\n")
 
-        # Create event based on parsed info
+        self.result_text.insert(tk.END, "\n" + "=" * 60 + "\n")
+        self.result_text.insert(tk.END, "📝 Form populated with parsed data.\n")
+        self.result_text.insert(tk.END, "Please review and click 'Schedule Event' to confirm.\n")
+
+        # Populate the form fields
         if parsed['action'] == 'create':
-            event = Event(
-                title=parsed.get('title', 'New Event'),
-                event_type=parsed.get('event_type', EventType.MEETING),
-                participants=parsed.get('participants', []),
-                location=parsed.get('location', '')
-            )
+            # Clear existing form data
+            for entry in self.form_entries.values():
+                entry.delete(0, tk.END)
+            self.tags_entry.delete(0, tk.END)
 
-            # Find optimal time if not specified
-            if parsed['datetime']:
-                event.start_time = parsed['datetime']
+            # Title
+            title = parsed.get('title', '')
+            if title:
+                self.form_entries['title'].insert(0, title)
+
+            # Description (if any)
+            description = parsed.get('description', '')
+            if description:
+                self.form_entries['description'].insert(0, description)
+
+            # Location
+            location = parsed.get('location', '')
+            if location:
+                self.form_entries['location'].insert(0, location)
+
+            # Participants
+            participants = parsed.get('participants', [])
+            if participants:
+                self.form_entries['participants'].insert(0, ', '.join(participants))
+
+            # Date and time
+            if parsed.get('datetime'):
+                dt = parsed['datetime']
+                self.form_entries['date'].insert(0, dt.strftime('%Y-%m-%d'))
+                self.form_entries['start_time'].insert(0, dt.strftime('%H:%M'))
+
+                # Duration
                 duration = parsed.get('duration', self.scheduling_engine.user_profile.preferred_meeting_length)
-                event.end_time = event.start_time + timedelta(minutes=duration)
+                self.form_entries['duration'].insert(0, str(duration))
             else:
-                optimal_slot = self.scheduling_engine.find_optimal_slot(event)
+                # Try to find optimal time
+                temp_event = Event(
+                    title=title or 'New Event',
+                    event_type=parsed.get('event_type', EventType.MEETING),
+                    participants=participants,
+                    location=location
+                )
+
+                optimal_slot = self.scheduling_engine.find_optimal_slot(temp_event)
                 if optimal_slot:
-                    event.start_time, event.end_time = optimal_slot
+                    start_time, end_time = optimal_slot
+                    self.form_entries['date'].insert(0, start_time.strftime('%Y-%m-%d'))
+                    self.form_entries['start_time'].insert(0, start_time.strftime('%H:%M'))
 
-            # Check for conflicts
-            conflicts = self.scheduling_engine.check_conflicts(event)
+                    duration_minutes = int((end_time - start_time).total_seconds() / 60)
+                    self.form_entries['duration'].insert(0, str(duration_minutes))
 
-            if conflicts:
-                self.result_text.insert(tk.END, "\n⚠️ Conflicts detected:\n")
-                for conflict in conflicts:
-                    self.result_text.insert(tk.END, f"  - {conflict['event']['summary']}\n")
+                    self.result_text.insert(tk.END, f"\n💡 Suggested optimal time: {start_time.strftime('%Y-%m-%d %H:%M')}\n")
 
-                # Ask for confirmation
-                if messagebox.askyesno("Conflicts Detected",
-                                       "There are conflicts. Do you want to schedule anyway?"):
-                    self.schedule_callback(event)
+            # Event type
+            event_type = parsed.get('event_type', EventType.MEETING)
+            if isinstance(event_type, EventType):
+                self.event_type_var.set(event_type.value)
             else:
-                # Ask for confirmation
-                self.result_text.insert(tk.END, f"\n✅ Proposed Time: {event.start_time} - {event.end_time}\n")
-                if messagebox.askyesno("Confirm Scheduling",
-                                       f"Schedule '{event.title}' at {event.start_time}?"):
-                    self.schedule_callback(event)
+                self.event_type_var.set(str(event_type))
 
-        self.update_status("Ready")
+            # Priority (default to medium)
+            priority = parsed.get('priority', 'MEDIUM')
+            if isinstance(priority, str):
+                self.priority_var.set(priority.upper())
+
+            # Prep time and follow-up time (if specified)
+            if parsed.get('prep_time'):
+                self.form_entries['prep_time'].insert(0, str(parsed['prep_time']))
+
+            if parsed.get('followup_time'):
+                self.form_entries['followup_time'].insert(0, str(parsed['followup_time']))
+
+            # Tags (if any)
+            tags = parsed.get('tags', [])
+            if tags:
+                self.tags_entry.insert(0, ', '.join(tags))
+
+            # Check for conflicts and display warning
+            if parsed.get('datetime'):
+                temp_event = Event(
+                    title=title or 'New Event',
+                    event_type=parsed.get('event_type', EventType.MEETING),
+                    start_time=parsed['datetime'],
+                    end_time=parsed['datetime'] + timedelta(minutes=parsed.get('duration', 60))
+                )
+
+                conflicts = self.scheduling_engine.check_conflicts(temp_event)
+                if conflicts:
+                    self.result_text.insert(tk.END, "\n⚠️  WARNING: Conflicts detected:\n")
+                    for conflict in conflicts:
+                        self.result_text.insert(tk.END, f"     - {conflict['event']['summary']}\n")
+                else:
+                    self.result_text.insert(tk.END, "\n✅ No conflicts detected.\n")
+
+        self.update_status("Form populated - review and click 'Schedule Event'")
 
     def schedule_event_from_form(self):
         """Schedule event from detailed form"""
@@ -231,3 +313,19 @@ class QuickScheduleTab:
     def display_result(self, message):
         """Display result message"""
         self.result_text.insert(tk.END, f"\n{message}\n")
+
+    def clear_nl_input(self):
+        """Clear natural language input field"""
+        self.nl_input.delete(0, tk.END)
+        self.result_text.delete(1.0, tk.END)
+
+    def clear_form(self):
+        """Clear all form fields"""
+        for entry in self.form_entries.values():
+            entry.delete(0, tk.END)
+        self.tags_entry.delete(0, tk.END)
+        self.event_type_var.set(EventType.MEETING.value)
+        self.priority_var.set("MEDIUM")
+        self.is_flexible_var.set(True)
+        self.result_text.delete(1.0, tk.END)
+        self.result_text.insert(tk.END, "✅ Form cleared. Ready for new event.\n")

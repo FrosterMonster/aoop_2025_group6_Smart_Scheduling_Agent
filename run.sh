@@ -1,1 +1,1 @@
-./venv/Scripts/python.exe -m ai_schedule_agent
+./venv/Scripts/python.exe -m ai_schedule_agent main_legacy.py

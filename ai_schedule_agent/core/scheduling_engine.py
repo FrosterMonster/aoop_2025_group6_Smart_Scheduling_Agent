@@ -35,12 +35,15 @@ class SchedulingEngine:
             search_end.isoformat() + 'Z'
         )
 
-        # Convert to busy slots
+        # Convert to busy slots (make timezone-naive for comparison)
         busy_slots = []
         for e in existing_events:
             if 'dateTime' in e.get('start', {}):
                 start = datetime.datetime.fromisoformat(e['start']['dateTime'].replace('Z', '+00:00'))
                 end = datetime.datetime.fromisoformat(e['end']['dateTime'].replace('Z', '+00:00'))
+                # Remove timezone info for comparison
+                start = start.replace(tzinfo=None)
+                end = end.replace(tzinfo=None)
                 busy_slots.append((start, end))
 
         # Calculate event duration including prep and followup

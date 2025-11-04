@@ -1,0 +1,21 @@
+2025-11-04 21:35:54,927 - INFO - "GET /?state=QO4jXRpSBr6FjoiUijCH1yCtKCqE5l&code=4/0Ab32j92EPhpj_ayNONyQPUuv__JoR0QhoS-a1h9MzmIRDiLahB4QshacF6bstY1OJ5t_yw&scope=https://www.googleapis.com/auth/calendar HTTP/1.1" 200 65
+2025-11-04 21:35:55,836 - INFO - file_cache is only supported with oauth2client<4.0.0
+2025-11-04 21:38:09,228 - INFO - file_cache is only supported with oauth2client<4.0.0
+2025-11-04 21:47:09,287 - INFO - file_cache is only supported with oauth2client<4.0.0
+2025-11-04 21:56:09,514 - INFO - file_cache is only supported with oauth2client<4.0.0
+2025-11-04 22:00:08,190 - INFO - file_cache is only supported with oauth2client<4.0.0
+2025-11-04 22:00:18,040 - INFO - file_cache is only supported with oauth2client<4.0.0
+2025-11-04 22:06:09,888 - INFO - file_cache is only supported with oauth2client<4.0.0
+2025-11-04 22:10:51,106 - INFO - file_cache is only supported with oauth2client<4.0.0
+2025-11-04 22:12:46,455 - INFO - file_cache is only supported with oauth2client<4.0.0
+2025-11-04 22:12:55,663 - INFO - NLP Parse: 'eecamp meeting at nycu at 11/27 pm9:00' -> {'action': 'create', 'event_type': <EventType.MEETING: 'meeting'>, 'participants': [], 'datetime': None, 'duration': None, 'location': None, 'title': 'eecamp meeting at nycu', 'description': None}
+2025-11-04 22:15:58,695 - INFO - NLP Parse: 'eecamp meeting at nycu at 11/27 pm9:00 for 5 hours' -> {'action': 'create', 'event_type': <EventType.MEETING: 'meeting'>, 'participants': [], 'datetime': None, 'duration': 300, 'location': None, 'title': 'eecamp meeting at nycu', 'description': None}
+2025-11-04 22:16:12,744 - INFO - file_cache is only supported with oauth2client<4.0.0
+2025-11-04 22:16:19,590 - INFO - NLP Parse: 'eecamp meeting at nycu at 11/27 pm9:00 for 5 hours' -> {'action': 'create', 'event_type': <EventType.MEETING: 'meeting'>, 'participants': [], 'datetime': None, 'duration': 300, 'location': None, 'title': 'eecamp meeting at nycu', 'description': None}
+2025-11-04 22:17:03,236 - INFO - NLP Parse: 'eecamp meeting at nycu at 11/27 pm9:00 for 5 hours' -> {'action': 'create', 'event_type': <EventType.MEETING: 'meeting'>, 'participants': [], 'datetime': None, 'duration': 300, 'location': None, 'title': 'eecamp meeting at nycu', 'description': None}
+2025-11-04 22:17:30,184 - INFO - NLP Parse: 'eecamp meeting at NYCU on 11/27 9:00pm' -> {'action': 'create', 'event_type': <EventType.MEETING: 'meeting'>, 'participants': [], 'datetime': None, 'duration': None, 'location': 'NYCU', 'title': 'eecamp meeting11/27 9:00pm', 'description': None}
+2025-11-04 22:17:33,694 - INFO - NLP Parse: 'eecamp meeting at NYCU on 11/27 9:00pm' -> {'action': 'create', 'event_type': <EventType.MEETING: 'meeting'>, 'participants': [], 'datetime': None, 'duration': None, 'location': 'NYCU', 'title': 'eecamp meeting11/27 9:00pm', 'description': None}
+2025-11-04 22:17:34,697 - INFO - NLP Parse: 'eecamp meeting at NYCU on 11/27 9:00pm' -> {'action': 'create', 'event_type': <EventType.MEETING: 'meeting'>, 'participants': [], 'datetime': None, 'duration': None, 'location': 'NYCU', 'title': 'eecamp meeting11/27 9:00pm', 'description': None}
+2025-11-04 22:17:35,204 - INFO - NLP Parse: 'eecamp meeting at NYCU on 11/27 9:00pm' -> {'action': 'create', 'event_type': <EventType.MEETING: 'meeting'>, 'participants': [], 'datetime': None, 'duration': None, 'location': 'NYCU', 'title': 'eecamp meeting11/27 9:00pm', 'description': None}
+2025-11-04 22:17:35,707 - INFO - NLP Parse: 'eecamp meeting at NYCU on 11/27 9:00pm' -> {'action': 'create', 'event_type': <EventType.MEETING: 'meeting'>, 'participants': [], 'datetime': None, 'duration': None, 'location': 'NYCU', 'title': 'eecamp meeting11/27 9:00pm', 'description': None}
+2025-11-04 22:17:36,239 - INFO - NLP Parse: 'eecamp meeting at NYCU on 11/27 9:00pm' -> {'action': 'create', 'event_type': <EventType.MEETING: 'meeting'>, 'participants': [], 'datetime': None, 'duration': None, 'location': 'NYCU', 'title': 'eecamp meeting11/27 9:00pm', 'description': None}
