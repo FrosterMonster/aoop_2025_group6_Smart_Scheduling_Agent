@@ -85,9 +85,18 @@ Only `.example` and `.template` files are shared via git.
 ```
 .
 ├── setup.sh                # Complete setup script (run this first!)
-├── run.sh                  # Run the application
-├── tmp.py                  # Main application code
+├── run.sh                  # Run the application (python -m ai_schedule_agent)
 ├── requirements.txt        # Python dependencies
+│
+├── ai_schedule_agent/      # Main application package (modular architecture)
+│   ├── __main__.py         # Entry point
+│   ├── config/             # Configuration management
+│   ├── models/             # Data models (Event, UserProfile, etc.)
+│   ├── core/               # Business logic (scheduling, ML, NLP)
+│   ├── integrations/       # External APIs (Google Calendar, notifications)
+│   ├── ui/                 # User interface (main window, tabs, wizard)
+│   └── utils/              # Utilities (logging, etc.)
+│   └── README.md           # Detailed package documentation
 │
 ├── .config/                # Configuration (user-specific, git-ignored)
 │   ├── README.md           # Config documentation
@@ -100,6 +109,8 @@ Only `.example` and `.template` files are shared via git.
 │   ├── NEW_USER_SETUP.md   # Detailed setup guide
 │   ├── WHAT_TO_MODIFY.md   # What files to edit
 │   └── TROUBLESHOOTING.md  # Common issues
+│
+├── main.py                 # Legacy entry point (kept for backward compatibility)
 │
 └── venv/                   # YOUR virtual env (not in git, create with setup.sh)
 ```

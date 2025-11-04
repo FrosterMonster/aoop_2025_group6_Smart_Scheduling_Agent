@@ -1,1 +1,1 @@
-./venv/Scripts/python.exe tmp.py
+./venv/Scripts/python.exe -m ai_schedule_agent
