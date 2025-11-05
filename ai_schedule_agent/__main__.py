@@ -7,6 +7,10 @@ Checks Python version compatibility and launches either the setup wizard or main
 
 import sys
 import os
+import time
+
+# Track startup time for performance monitoring
+_startup_start = time.time()
 
 # Check Python version before importing anything else
 MIN_PYTHON = (3, 9)
@@ -21,27 +25,35 @@ if sys.version_info[:2] > MAX_PYTHON:
           f"You are using Python {sys.version_info.major}.{sys.version_info.minor}. "
           f"If you encounter issues, consider using Python {MAX_PYTHON[0]}.{MAX_PYTHON[1]}")
 
-# Now safe to import the application modules
-from ai_schedule_agent.config.manager import ConfigManager
-from ai_schedule_agent.ui.setup_wizard import SetupWizard
-from ai_schedule_agent.ui.main_window import SchedulerUI
-
 
 def main():
     """Main entry point for the application"""
+    # Defer imports until main() is called to speed up startup
+    from ai_schedule_agent.config.manager import ConfigManager
+    from ai_schedule_agent.ui.setup_wizard import SetupWizard
+    from ai_schedule_agent.ui.main_window import SchedulerUI
+
+    _import_end = time.time()
+    import_time = (_import_end - _startup_start) * 1000  # Convert to ms
+
     # Initialize config
     config = ConfigManager()
 
     # Check if this is first run
     profile_file = config.get_path('user_profile', '.config/user_profile.json')
 
+    _init_end = time.time()
+    init_time = (_init_end - _import_end) * 1000  # Convert to ms
+
     if not os.path.exists(profile_file):
         # Run setup wizard
+        print(f"⚡ Startup time: imports={import_time:.0f}ms, init={init_time:.0f}ms, total={(_init_end - _startup_start)*1000:.0f}ms")
         print("First-time setup detected. Launching setup wizard...")
         wizard = SetupWizard()
         wizard.run()
     else:
         # Run main application
+        print(f"⚡ Startup time: imports={import_time:.0f}ms, init={init_time:.0f}ms, total={(_init_end - _startup_start)*1000:.0f}ms")
         print("Starting AI Schedule Agent...")
         app = SchedulerUI()
         app.run()

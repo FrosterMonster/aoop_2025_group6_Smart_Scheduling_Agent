@@ -3,6 +3,7 @@
 import os
 import json
 import shutil
+from dotenv import load_dotenv
 
 
 class ConfigManager:
@@ -23,6 +24,9 @@ class ConfigManager:
 
         self._initialized = True
         self.config_dir = self._config_dir
+
+        # Load environment variables from .env file
+        load_dotenv()
 
         # Ensure config directory exists
         os.makedirs(self.config_dir, exist_ok=True)
@@ -124,3 +128,108 @@ class ConfigManager:
         filepath = os.path.join(self.config_dir, 'settings.json')
         with open(filepath, 'w') as f:
             json.dump(self.settings, f, indent=2)
+
+    def get_api_key(self, provider='openai'):
+        """Get API key for specified provider from environment variables
+
+        Args:
+            provider (str): Provider name ('openai' or 'gemini')
+
+        Returns:
+            str: API key or None if not found
+        """
+        env_var_name = f"{provider.upper()}_API_KEY"
+        api_key = os.getenv(env_var_name)
+
+        if not api_key:
+            # Try to get from settings.json as fallback
+            api_key = self.get_setting('llm', provider, 'api_key')
+
+        return api_key
+
+    def is_dry_run(self):
+        """Check if DRY_RUN mode is enabled
+
+        Returns:
+            bool: True if DRY_RUN mode is enabled
+        """
+        dry_run_env = os.getenv('DRY_RUN', '0')
+        return dry_run_env == '1' or dry_run_env.lower() == 'true'
+
+    def use_llm(self):
+        """Check if LLM should be used for NLP processing
+
+        Returns:
+            bool: True if LLM should be used
+        """
+        use_llm_env = os.getenv('USE_LLM', '1')
+        return use_llm_env == '1' or use_llm_env.lower() == 'true'
+
+    def get_llm_provider(self):
+        """Get the configured LLM provider
+
+        Returns:
+            str: LLM provider name ('claude', 'openai', or 'gemini')
+        """
+        # Try environment variable first, then settings.json
+        provider = os.getenv('LLM_PROVIDER')
+        if not provider:
+            provider = self.get_setting('llm', 'provider', default='claude')
+        return provider.lower()
+
+    def get_timezone(self):
+        """Get the default timezone for time parsing
+
+        Returns:
+            str: Timezone string (e.g., 'Asia/Taipei')
+        """
+        # Try environment variable first, then settings.json, then default
+        tz = os.getenv('DEFAULT_TIMEZONE')
+        if not tz:
+            tz = self.get_setting('google_calendar', 'timezone', default='Asia/Taipei')
+        return tz
+
+    def get_openai_model(self):
+        """Get the OpenAI model to use
+
+        Returns:
+            str: OpenAI model name
+        """
+        return os.getenv('OPENAI_MODEL', 'gpt-3.5-turbo')
+
+    def get_max_tokens(self):
+        """Get the maximum tokens for LLM responses
+
+        Returns:
+            int: Maximum tokens
+        """
+        try:
+            max_tokens = os.getenv('MAX_TOKENS')
+            if max_tokens:
+                return int(max_tokens)
+            # Try settings.json
+            return self.get_setting('llm', 'max_tokens', default=1000)
+        except ValueError:
+            return 1000
+
+    def get_claude_model(self):
+        """Get the Claude model to use
+
+        Returns:
+            str: Claude model name
+        """
+        model = os.getenv('CLAUDE_MODEL')
+        if not model:
+            model = self.get_setting('llm', 'claude', 'model', default='claude-3-5-sonnet-20241022')
+        return model
+
+    def get_gemini_model(self):
+        """Get the Gemini model to use
+
+        Returns:
+            str: Gemini model name
+        """
+        model = os.getenv('GEMINI_MODEL')
+        if not model:
+            model = self.get_setting('llm', 'gemini', 'model', default='gemini-pro')
+        return model

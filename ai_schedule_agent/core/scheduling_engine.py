@@ -4,11 +4,16 @@ import datetime
 from datetime import timedelta
 from typing import Optional, Tuple, List, Dict
 import numpy as np
+import pytz
+import logging
 
 from ai_schedule_agent.models.event import Event
 from ai_schedule_agent.models.user_profile import UserProfile
 from ai_schedule_agent.models.enums import EventType
 from ai_schedule_agent.core.pattern_learner import PatternLearner
+from ai_schedule_agent.config.manager import ConfigManager
+
+logger = logging.getLogger(__name__)
 
 
 class SchedulingEngine:
@@ -164,3 +169,262 @@ class SchedulingEngine:
             })
 
         return suggestions
+
+    def get_busy_periods(self, start_dt: datetime.datetime, end_dt: datetime.datetime,
+                        calendar_id: str = 'primary') -> List[Tuple[datetime.datetime, datetime.datetime]]:
+        """Get busy periods from Google Calendar using FreeBusy API
+
+        Args:
+            start_dt: Start of time range
+            end_dt: End of time range
+            calendar_id: Calendar ID (default: 'primary')
+
+        Returns:
+            List of (start, end) tuples for busy periods
+        """
+        try:
+            # Ensure timezone-aware datetimes
+            config = ConfigManager()
+            tz_str = config.get_timezone()
+            tz = pytz.timezone(tz_str)
+
+            if start_dt.tzinfo is None:
+                start_dt = tz.localize(start_dt)
+            if end_dt.tzinfo is None:
+                end_dt = tz.localize(end_dt)
+
+            # Convert to UTC for API call
+            start_utc = start_dt.astimezone(pytz.utc)
+            end_utc = end_dt.astimezone(pytz.utc)
+
+            # Query FreeBusy API
+            body = {
+                "timeMin": start_utc.isoformat(),
+                "timeMax": end_utc.isoformat(),
+                "items": [{"id": calendar_id}]
+            }
+
+            result = self.calendar.service.freebusy().query(body=body).execute()
+            busy_list = result.get('calendars', {}).get(calendar_id, {}).get('busy', [])
+
+            # Convert to datetime tuples
+            busy_periods = []
+            for busy_slot in busy_list:
+                start_str = busy_slot['start']
+                end_str = busy_slot['end']
+                start = datetime.datetime.fromisoformat(start_str.replace('Z', '+00:00'))
+                end = datetime.datetime.fromisoformat(end_str.replace('Z', '+00:00'))
+                # Convert to local timezone
+                start = start.astimezone(tz)
+                end = end.astimezone(tz)
+                busy_periods.append((start, end))
+
+            logger.info(f"Found {len(busy_periods)} busy periods between {start_dt} and {end_dt}")
+            return busy_periods
+
+        except Exception as e:
+            logger.error(f"Error querying busy periods: {e}", exc_info=True)
+            return []
+
+    def find_free_slots_between(self, start_dt: datetime.datetime, end_dt: datetime.datetime,
+                                min_duration_minutes: int = 60,
+                                calendar_id: str = 'primary') -> List[Tuple[datetime.datetime, datetime.datetime]]:
+        """Find free time slots in a given range
+
+        Args:
+            start_dt: Start of search range
+            end_dt: End of search range
+            min_duration_minutes: Minimum slot duration in minutes
+            calendar_id: Calendar ID (default: 'primary')
+
+        Returns:
+            List of (start, end) tuples for free slots
+        """
+        # Get busy periods
+        busy_periods = self.get_busy_periods(start_dt, end_dt, calendar_id)
+
+        if not busy_periods:
+            # No busy periods - entire range is free
+            return [(start_dt, end_dt)]
+
+        # Sort and merge overlapping busy periods
+        busy_periods.sort(key=lambda x: x[0])
+        merged_busy = []
+        current_start, current_end = busy_periods[0]
+
+        for start, end in busy_periods[1:]:
+            if start <= current_end:
+                # Overlapping or adjacent - merge
+                current_end = max(current_end, end)
+            else:
+                # No overlap - save current and start new
+                merged_busy.append((current_start, current_end))
+                current_start, current_end = start, end
+
+        merged_busy.append((current_start, current_end))
+
+        # Find gaps (free slots) between busy periods
+        free_slots = []
+
+        # Check before first busy period
+        if merged_busy[0][0] > start_dt:
+            gap_duration = (merged_busy[0][0] - start_dt).total_seconds() / 60
+            if gap_duration >= min_duration_minutes:
+                free_slots.append((start_dt, merged_busy[0][0]))
+
+        # Check gaps between busy periods
+        for i in range(len(merged_busy) - 1):
+            gap_start = merged_busy[i][1]
+            gap_end = merged_busy[i + 1][0]
+            gap_duration = (gap_end - gap_start).total_seconds() / 60
+
+            if gap_duration >= min_duration_minutes:
+                free_slots.append((gap_start, gap_end))
+
+        # Check after last busy period
+        if merged_busy[-1][1] < end_dt:
+            gap_duration = (end_dt - merged_busy[-1][1]).total_seconds() / 60
+            if gap_duration >= min_duration_minutes:
+                free_slots.append((merged_busy[-1][1], end_dt))
+
+        logger.info(f"Found {len(free_slots)} free slots (min {min_duration_minutes} min)")
+        return free_slots
+
+    def plan_week_schedule(self, summary: str, total_hours: float, chunk_hours: float = 2.0,
+                          daily_window: Tuple[int, int] = (9, 18), max_weeks: int = 4,
+                          calendar_id: str = 'primary', event_type: EventType = EventType.FOCUS,
+                          description: str = None) -> List[Dict]:
+        """Automatically schedule a task across multiple weeks by finding free slots
+
+        This is the advanced auto-scheduling feature from 阿嚕米.
+
+        Args:
+            summary: Event title/summary
+            total_hours: Total hours to schedule
+            chunk_hours: Preferred chunk size in hours (default: 2.0)
+            daily_window: Time window tuple (start_hour, end_hour), e.g., (9, 18) for 9am-6pm
+            max_weeks: Maximum weeks to look ahead (default: 4)
+            calendar_id: Calendar ID (default: 'primary')
+            event_type: Type of event (default: FOCUS)
+            description: Optional event description
+
+        Returns:
+            List of created event dictionaries with 'start', 'end', 'summary', 'event_id'
+
+        Example:
+            >>> engine.plan_week_schedule("Study Electronics", total_hours=10, chunk_hours=2.5)
+            # Creates 4 events of 2.5 hours each across available slots
+        """
+        config = ConfigManager()
+        tz_str = config.get_timezone()
+        tz = pytz.timezone(tz_str)
+
+        now = datetime.datetime.now(tz)
+        hours_remaining = total_hours
+        chunk_minutes = int(chunk_hours * 60)
+        created_events = []
+
+        logger.info(f"Planning week schedule: '{summary}' - {total_hours}h total in {chunk_hours}h chunks")
+
+        # Check DRY_RUN mode
+        is_dry_run = config.is_dry_run()
+        if is_dry_run:
+            logger.info("DRY_RUN mode active - will simulate event creation")
+
+        # Iterate through days
+        for week in range(max_weeks):
+            for day in range(7):
+                if hours_remaining <= 0:
+                    break
+
+                # Calculate date
+                target_date = (now + timedelta(days=week * 7 + day)).date()
+                day_name = target_date.strftime('%A')
+
+                # Create daily window
+                window_start = tz.localize(datetime.datetime.combine(
+                    target_date,
+                    datetime.time(daily_window[0], 0)
+                ))
+                window_end = tz.localize(datetime.datetime.combine(
+                    target_date,
+                    datetime.time(daily_window[1], 0)
+                ))
+
+                # Skip if window is in the past
+                if window_end < now:
+                    continue
+
+                # Adjust window start if partially in past
+                if window_start < now:
+                    window_start = now
+
+                # Find free slots in this daily window
+                free_slots = self.find_free_slots_between(
+                    window_start,
+                    window_end,
+                    min_duration_minutes=min(chunk_minutes, int(hours_remaining * 60)),
+                    calendar_id=calendar_id
+                )
+
+                # Try to fill free slots
+                for slot_start, slot_end in free_slots:
+                    if hours_remaining <= 0:
+                        break
+
+                    # Calculate chunk size for this slot
+                    slot_duration_hours = (slot_end - slot_start).total_seconds() / 3600
+                    chunk_to_schedule = min(chunk_hours, hours_remaining, slot_duration_hours)
+
+                    if chunk_to_schedule < 0.5:  # Skip very small chunks
+                        continue
+
+                    # Create event
+                    event_start = slot_start
+                    event_end = event_start + timedelta(hours=chunk_to_schedule)
+
+                    # Create Event object
+                    event = Event(
+                        title=summary,
+                        start_time=event_start,
+                        end_time=event_end,
+                        event_type=event_type,
+                        description=description or f"Auto-scheduled: {chunk_to_schedule:.1f}h block"
+                    )
+
+                    try:
+                        if is_dry_run:
+                            # Simulate
+                            logger.info(f"DRY_RUN: Would create event '{summary}' on {event_start.strftime('%Y-%m-%d %H:%M')} - {event_end.strftime('%H:%M')} ({chunk_to_schedule:.1f}h)")
+                            event_id = f"dry_run_{len(created_events)}"
+                        else:
+                            # Actually create the event
+                            event_result = self.calendar.create_event(event)
+                            event_id = event_result.get('id', 'unknown')
+                            logger.info(f"Created event '{summary}' on {event_start.strftime('%Y-%m-%d %H:%M')} ({chunk_to_schedule:.1f}h)")
+
+                        created_events.append({
+                            'start': event_start,
+                            'end': event_end,
+                            'summary': summary,
+                            'event_id': event_id,
+                            'duration_hours': chunk_to_schedule,
+                            'dry_run': is_dry_run
+                        })
+
+                        hours_remaining -= chunk_to_schedule
+
+                    except Exception as e:
+                        logger.error(f"Failed to create event: {e}")
+
+            if hours_remaining <= 0:
+                break
+
+        # Summary
+        total_scheduled = total_hours - hours_remaining
+        logger.info(f"Scheduled {total_scheduled:.1f}h out of {total_hours}h requested ({len(created_events)} events)")
+
+        if hours_remaining > 0:
+            logger.warning(f"Could not schedule remaining {hours_remaining:.1f}h (no free slots found in {max_weeks} weeks)")
+
+        return created_events

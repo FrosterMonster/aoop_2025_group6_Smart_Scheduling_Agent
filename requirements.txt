@@ -14,6 +14,14 @@ scikit-learn>=1.2.0
 spacy>=3.5.0
 dateparser>=1.1.8
 
+# LLM Integration
+openai>=1.0.0
+anthropic>=0.18.0
+python-dotenv>=1.0.0
+
+# Timezone Support
+pytz>=2023.3
+
 # UI and Notifications
 plyer>=2.1.0
 

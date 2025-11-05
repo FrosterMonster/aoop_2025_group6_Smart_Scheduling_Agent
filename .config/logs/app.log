@@ -19,3 +19,158 @@
 2025-11-04 22:17:35,204 - INFO - NLP Parse: 'eecamp meeting at NYCU on 11/27 9:00pm' -> {'action': 'create', 'event_type': <EventType.MEETING: 'meeting'>, 'participants': [], 'datetime': None, 'duration': None, 'location': 'NYCU', 'title': 'eecamp meeting11/27 9:00pm', 'description': None}
 2025-11-04 22:17:35,707 - INFO - NLP Parse: 'eecamp meeting at NYCU on 11/27 9:00pm' -> {'action': 'create', 'event_type': <EventType.MEETING: 'meeting'>, 'participants': [], 'datetime': None, 'duration': None, 'location': 'NYCU', 'title': 'eecamp meeting11/27 9:00pm', 'description': None}
 2025-11-04 22:17:36,239 - INFO - NLP Parse: 'eecamp meeting at NYCU on 11/27 9:00pm' -> {'action': 'create', 'event_type': <EventType.MEETING: 'meeting'>, 'participants': [], 'datetime': None, 'duration': None, 'location': 'NYCU', 'title': 'eecamp meeting11/27 9:00pm', 'description': None}
+2025-11-05 05:48:38,021 - INFO - Logging initialized - Level: INFO, Handlers: 2
+2025-11-05 05:49:11,502 - INFO - Claude provider initialized: claude-3-5-sonnet-20241022
+2025-11-05 05:49:11,504 - INFO - LLM Agent initialized with provider: claude
+2025-11-05 05:49:11,506 - INFO - NLP Processor initialized with LLM support
+2025-11-05 05:49:13,637 - INFO - file_cache is only supported with oauth2client<4.0.0
+2025-11-05 05:53:46,016 - INFO - Logging initialized - Level: INFO, Handlers: 2
+2025-11-05 05:54:31,431 - INFO - Claude provider initialized: claude-3-5-sonnet-20241022
+2025-11-05 05:54:31,433 - INFO - LLM Agent initialized with provider: claude
+2025-11-05 05:54:31,436 - INFO - NLP Processor initialized with LLM support
+2025-11-05 05:54:33,558 - INFO - file_cache is only supported with oauth2client<4.0.0
+2025-11-05 05:56:18,632 - INFO - Processing with LLM: 'eecamp meeting on 11/27,28 pm9:00 last 3 hours at nycu'
+2025-11-05 05:56:18,634 - INFO - Calling claude API (attempt 1/3)
+2025-11-05 05:56:19,254 - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 400 Bad Request"
+2025-11-05 05:56:19,256 - WARNING - API call failed (attempt 1): Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.'}, 'request_id': 'req_011CUobWvXJ1Zii1Jjn1Pqta'}. Retrying in 1s...
+2025-11-05 05:56:19,626 - INFO - Logging initialized - Level: INFO, Handlers: 2
+2025-11-05 05:56:20,313 - INFO - Calling claude API (attempt 2/3)
+2025-11-05 05:56:20,526 - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 400 Bad Request"
+2025-11-05 05:56:20,529 - WARNING - API call failed (attempt 2): Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.'}, 'request_id': 'req_011CUobX2wzapfzX7TyBXJGF'}. Retrying in 2s...
+2025-11-05 05:56:22,532 - INFO - Calling claude API (attempt 3/3)
+2025-11-05 05:56:22,743 - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 400 Bad Request"
+2025-11-05 05:56:22,747 - ERROR - Error processing request with claude: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.'}, 'request_id': 'req_011CUobXCMHuGtZkSikzHbfc'}
+Traceback (most recent call last):
+  File "/mnt/d/Coding/NYCU/AOOP/group project/group_6/ai_schedule_agent/core/llm_agent.py", line 361, in process_request
+    response_data = self.provider.call_llm(
+                    ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/d/Coding/NYCU/AOOP/group project/group_6/ai_schedule_agent/core/llm_agent.py", line 92, in call_llm
+    response = self.client.messages.create(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/d/Coding/NYCU/AOOP/group project/group_6/venv/lib/python3.12/site-packages/anthropic/_utils/_utils.py", line 282, in wrapper
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/d/Coding/NYCU/AOOP/group project/group_6/venv/lib/python3.12/site-packages/anthropic/resources/messages/messages.py", line 927, in create
+    return self._post(
+           ^^^^^^^^^^^
+  File "/mnt/d/Coding/NYCU/AOOP/group project/group_6/venv/lib/python3.12/site-packages/anthropic/_base_client.py", line 1326, in post
+    return cast(ResponseT, self.request(cast_to, opts, stream=stream, stream_cls=stream_cls))
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/d/Coding/NYCU/AOOP/group project/group_6/venv/lib/python3.12/site-packages/anthropic/_base_client.py", line 1114, in request
+    raise self._make_status_error_from_response(err.response) from None
+anthropic.BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.'}, 'request_id': 'req_011CUobXCMHuGtZkSikzHbfc'}
+2025-11-05 05:56:22,824 - WARNING - LLM processing failed, falling back to rule-based NLP
+2025-11-05 05:56:22,827 - INFO - Processing with rule-based NLP: 'eecamp meeting on 11/27,28 pm9:00 last 3 hours at nycu'
+2025-11-05 05:56:29,036 - INFO - NLP Parse: 'eecamp meeting on 11/27,28 pm9:00 last 3 hours at nycu' -> {'action': 'create', 'event_type': <EventType.MEETING: 'meeting'>, 'participants': [], 'datetime': None, 'duration': 180, 'location': None, 'title': 'eecamp meeting on 11/27,28 pm9:00 last 3 hours at nycu', 'description': None, 'llm_mode': False}
+2025-11-05 05:56:48,091 - INFO - Claude provider initialized: claude-3-5-sonnet-20241022
+2025-11-05 05:56:48,094 - INFO - LLM Agent initialized with provider: claude
+2025-11-05 05:56:48,095 - INFO - NLP Processor initialized with LLM support
+2025-11-05 05:56:49,915 - INFO - file_cache is only supported with oauth2client<4.0.0
+2025-11-05 05:58:20,288 - INFO - Logging initialized - Level: INFO, Handlers: 2
+2025-11-05 05:58:57,947 - INFO - Claude provider initialized: claude-3-5-sonnet-20241022
+2025-11-05 05:58:57,949 - INFO - LLM Agent initialized with provider: claude
+2025-11-05 05:58:57,951 - INFO - NLP Processor initialized with LLM support
+2025-11-05 05:59:00,303 - INFO - file_cache is only supported with oauth2client<4.0.0
+2025-11-05 06:00:10,483 - INFO - Created event: 'eecamp' (ID: lkhkdlgnl25qg9t8fo3p85u47o)
+2025-11-05 06:11:10,052 - INFO - Logging initialized - Level: INFO, Handlers: 2
+2025-11-05 06:11:31,602 - INFO - NLP Processor initialized (lazy loading enabled)
+2025-11-05 06:11:31,726 - INFO - file_cache is only supported with oauth2client<4.0.0
+2025-11-05 06:12:14,346 - ERROR - Failed to send desktop notification: No usable implementation found!
+2025-11-05 18:09:48,477 - INFO - Logging initialized - Level: INFO, Handlers: 2
+2025-11-05 18:11:06,498 - INFO - NLP Processor initialized (lazy loading enabled)
+2025-11-05 18:11:06,501 - INFO - Setting up UI...
+2025-11-05 18:11:06,505 - INFO - Loading Quick Schedule tab...
+2025-11-05 18:11:06,720 - INFO - Loading Calendar View tab...
+2025-11-05 18:11:07,790 - INFO - file_cache is only supported with oauth2client<4.0.0
+2025-11-05 18:11:08,597 - INFO - Loading Settings tab...
+2025-11-05 18:11:08,698 - INFO - Creating Insights tab placeholder...
+2025-11-05 18:11:08,702 - INFO - UI setup complete (Insights tab will load on demand)
+2025-11-05 18:11:16,821 - INFO - Loading Insights tab for first time (loading numpy...)...
+2025-11-05 18:11:16,889 - INFO - Insights tab loaded successfully
+2025-11-05 18:19:28,450 - INFO - Logging initialized - Level: INFO, Handlers: 2
+2025-11-05 18:19:49,271 - INFO - I18n initialized with language: en
+2025-11-05 18:19:49,273 - INFO - UI styles configured with Chinese font support
+2025-11-05 18:19:49,281 - INFO - NLP Processor initialized (lazy loading enabled)
+2025-11-05 18:19:49,283 - INFO - Setting up UI...
+2025-11-05 18:19:49,291 - INFO - Loading Quick Schedule tab...
+2025-11-05 18:33:33,002 - INFO - Logging initialized - Level: INFO, Handlers: 2
+2025-11-05 18:34:44,860 - INFO - I18n initialized with language: en
+2025-11-05 18:34:44,863 - INFO - UI styles configured with Chinese font support
+2025-11-05 18:34:44,901 - INFO - NLP Processor initialized (lazy loading enabled)
+2025-11-05 18:34:44,906 - INFO - Setting up UI...
+2025-11-05 18:34:44,911 - INFO - Loading Quick Schedule tab...
+2025-11-05 18:34:45,124 - INFO - Loading Calendar View tab...
+2025-11-05 18:34:45,349 - INFO - file_cache is only supported with oauth2client<4.0.0
+2025-11-05 18:34:46,368 - INFO - Loading Settings tab...
+2025-11-05 18:34:46,481 - INFO - Creating Insights tab placeholder...
+2025-11-05 18:34:46,485 - INFO - UI setup complete (Insights tab will load on demand)
+2025-11-05 18:35:12,207 - INFO - Loading Insights tab for first time (loading numpy...)...
+2025-11-05 18:35:12,312 - INFO - Insights tab loaded successfully
+2025-11-05 18:35:56,553 - INFO - Initializing Claude provider: claude-3-5-sonnet-20241022
+2025-11-05 18:36:26,654 - INFO - Claude provider initialized successfully
+2025-11-05 18:36:26,657 - INFO - LLM Agent initialized with provider: claude
+2025-11-05 18:36:26,659 - INFO - LLM agent initialized successfully
+2025-11-05 18:36:26,661 - INFO - Processing with LLM: 'eecamp meeting 11/27 pm9:00 at nycu last 3 hr'
+2025-11-05 18:36:26,664 - INFO - Calling claude API (attempt 1/3)
+2025-11-05 18:36:27,055 - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 400 Bad Request"
+2025-11-05 18:36:27,059 - WARNING - API call failed (attempt 1): Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.'}, 'request_id': 'req_011CUpbUr9ZUeeRVuw4UEWa3'}. Retrying in 1s...
+2025-11-05 18:36:28,084 - INFO - Calling claude API (attempt 2/3)
+2025-11-05 18:36:28,336 - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 400 Bad Request"
+2025-11-05 18:36:28,343 - WARNING - API call failed (attempt 2): Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.'}, 'request_id': 'req_011CUpbUwVHA5TXXUa1dWa3g'}. Retrying in 2s...
+2025-11-05 18:36:30,357 - INFO - Calling claude API (attempt 3/3)
+2025-11-05 18:36:30,604 - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 400 Bad Request"
+2025-11-05 18:36:30,610 - ERROR - Error processing request with claude: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.'}, 'request_id': 'req_011CUpbV6ju5nc17zovDTdMf'}
+Traceback (most recent call last):
+  File "/mnt/d/Coding/NYCU/AOOP/group project/group_6/ai_schedule_agent/core/llm_agent.py", line 385, in process_request
+    response_data = self.provider.call_llm(
+                    ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/d/Coding/NYCU/AOOP/group project/group_6/ai_schedule_agent/core/llm_agent.py", line 104, in call_llm
+    response = self.client.messages.create(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/d/Coding/NYCU/AOOP/group project/group_6/venv/lib/python3.12/site-packages/anthropic/_utils/_utils.py", line 282, in wrapper
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/d/Coding/NYCU/AOOP/group project/group_6/venv/lib/python3.12/site-packages/anthropic/resources/messages/messages.py", line 927, in create
+    return self._post(
+           ^^^^^^^^^^^
+  File "/mnt/d/Coding/NYCU/AOOP/group project/group_6/venv/lib/python3.12/site-packages/anthropic/_base_client.py", line 1326, in post
+    return cast(ResponseT, self.request(cast_to, opts, stream=stream, stream_cls=stream_cls))
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/d/Coding/NYCU/AOOP/group project/group_6/venv/lib/python3.12/site-packages/anthropic/_base_client.py", line 1114, in request
+    raise self._make_status_error_from_response(err.response) from None
+anthropic.BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.'}, 'request_id': 'req_011CUpbV6ju5nc17zovDTdMf'}
+2025-11-05 18:36:30,926 - WARNING - LLM processing failed, falling back to rule-based NLP
+2025-11-05 18:36:30,928 - INFO - Processing with rule-based NLP: 'eecamp meeting 11/27 pm9:00 at nycu last 3 hr'
+2025-11-05 18:36:43,857 - INFO - NLP Parse: 'eecamp meeting 11/27 pm9:00 at nycu last 3 hr' -> {'action': 'create', 'event_type': <EventType.MEETING: 'meeting'>, 'participants': [], 'datetime': None, 'duration': None, 'location': None, 'title': 'eecamp meeting 11/27 pm9:00 at nycu last 3 hr', 'description': None, 'llm_mode': False}
+2025-11-05 18:36:44,326 - INFO - Processing with LLM: 'eecamp meeting 11/27 pm9:00 at nycu last 3 hr'
+2025-11-05 18:36:44,330 - INFO - Calling claude API (attempt 1/3)
+2025-11-05 18:36:44,678 - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 400 Bad Request"
+2025-11-05 18:36:44,684 - WARNING - API call failed (attempt 1): Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.'}, 'request_id': 'req_011CUpbW74XWraq2BkQkMr15'}. Retrying in 4s...
+2025-11-05 18:36:47,705 - INFO - Calling claude API (attempt 2/3)
+2025-11-05 18:36:47,950 - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 400 Bad Request"
+2025-11-05 18:36:47,954 - WARNING - API call failed (attempt 2): Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.'}, 'request_id': 'req_011CUpbWQt5xSA3VirsngnYg'}. Retrying in 8s...
+2025-11-05 18:36:55,981 - INFO - Calling claude API (attempt 3/3)
+2025-11-05 18:36:56,326 - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 400 Bad Request"
+2025-11-05 18:36:56,333 - ERROR - Error processing request with claude: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.'}, 'request_id': 'req_011CUpbX1G44cRFRsMdGMPhw'}
+Traceback (most recent call last):
+  File "/mnt/d/Coding/NYCU/AOOP/group project/group_6/ai_schedule_agent/core/llm_agent.py", line 385, in process_request
+    response_data = self.provider.call_llm(
+                    ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/d/Coding/NYCU/AOOP/group project/group_6/ai_schedule_agent/core/llm_agent.py", line 104, in call_llm
+    response = self.client.messages.create(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/d/Coding/NYCU/AOOP/group project/group_6/venv/lib/python3.12/site-packages/anthropic/_utils/_utils.py", line 282, in wrapper
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/d/Coding/NYCU/AOOP/group project/group_6/venv/lib/python3.12/site-packages/anthropic/resources/messages/messages.py", line 927, in create
+    return self._post(
+           ^^^^^^^^^^^
+  File "/mnt/d/Coding/NYCU/AOOP/group project/group_6/venv/lib/python3.12/site-packages/anthropic/_base_client.py", line 1326, in post
+    return cast(ResponseT, self.request(cast_to, opts, stream=stream, stream_cls=stream_cls))
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/d/Coding/NYCU/AOOP/group project/group_6/venv/lib/python3.12/site-packages/anthropic/_base_client.py", line 1114, in request
+    raise self._make_status_error_from_response(err.response) from None
+anthropic.BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.'}, 'request_id': 'req_011CUpbX1G44cRFRsMdGMPhw'}
+2025-11-05 18:36:56,379 - WARNING - LLM processing failed, falling back to rule-based NLP
+2025-11-05 18:36:56,382 - INFO - Processing with rule-based NLP: 'eecamp meeting 11/27 pm9:00 at nycu last 3 hr'
+2025-11-05 18:36:56,469 - INFO - NLP Parse: 'eecamp meeting 11/27 pm9:00 at nycu last 3 hr' -> {'action': 'create', 'event_type': <EventType.MEETING: 'meeting'>, 'participants': [], 'datetime': None, 'duration': None, 'location': None, 'title': 'eecamp meeting 11/27 pm9:00 at nycu last 3 hr', 'description': None, 'llm_mode': False}

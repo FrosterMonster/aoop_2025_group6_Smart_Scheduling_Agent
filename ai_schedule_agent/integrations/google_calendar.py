@@ -87,7 +87,17 @@ class CalendarIntegration:
             return []
 
     def create_event(self, event: Event):
-        """Create event in Google Calendar"""
+        """Create event in Google Calendar (respects DRY_RUN mode)"""
+        # Check DRY_RUN mode
+        if self.config.is_dry_run():
+            logger.info(f"DRY_RUN: Would create event '{event.title}' from {event.start_time} to {event.end_time}")
+            return {
+                'id': 'dry_run_event_id',
+                'htmlLink': f'https://calendar.google.com/calendar/dry_run',
+                'summary': event.title,
+                'dry_run': True
+            }
+
         if not self.service:
             self.authenticate()
 
@@ -98,13 +108,24 @@ class CalendarIntegration:
                 body=google_event
             ).execute()
 
-            return created_event['id']
+            logger.info(f"Created event: '{event.title}' (ID: {created_event['id']})")
+            return created_event
         except HttpError as error:
-            logger.error(f'An error occurred: {error}')
+            logger.error(f'An error occurred creating event: {error}')
             return None
 
     def update_event(self, event_id: str, event: Event):
-        """Update existing event"""
+        """Update existing event (respects DRY_RUN mode)"""
+        # Check DRY_RUN mode
+        if self.config.is_dry_run():
+            logger.info(f"DRY_RUN: Would update event ID '{event_id}' with '{event.title}' from {event.start_time} to {event.end_time}")
+            return {
+                'id': event_id,
+                'htmlLink': f'https://calendar.google.com/calendar/dry_run',
+                'summary': event.title,
+                'dry_run': True
+            }
+
         if not self.service:
             self.authenticate()
 
@@ -116,9 +137,10 @@ class CalendarIntegration:
                 body=google_event
             ).execute()
 
-            return updated_event['id']
+            logger.info(f"Updated event: '{event.title}' (ID: {event_id})")
+            return updated_event
         except HttpError as error:
-            logger.error(f'An error occurred: {error}')
+            logger.error(f'An error occurred updating event: {error}')
             return None
 
     def check_availability(self, start_time: datetime.datetime,
