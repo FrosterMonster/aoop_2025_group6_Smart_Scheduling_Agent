@@ -251,13 +251,26 @@ class GeminiProvider(BaseLLMProvider):
             # Add structured output instructions
             full_prompt += """Analyze the user's request and respond with structured JSON.
 
-If the user wants to schedule an event, respond with:
+When user wants to schedule WITHOUT specific time, first check their schedule:
+{
+  "action": "check_schedule",
+  "date": "date to check (e.g., '11/27', 'tomorrow')",
+  "duration": "required duration (e.g., '3 hours', '4 hrs')",
+  "event_details": {
+    "summary": "event title",
+    "description": "optional description",
+    "location": "optional location"
+  },
+  "response": "Let me check your schedule for [date] to find a good time."
+}
+
+When scheduling WITH specific time, create the event directly:
 {
   "action": "schedule_event",
   "event": {
     "summary": "event title",
     "start_time_str": "start time in natural language or standard format",
-    "end_time_str": "end time in natural language or standard format",
+    "end_time_str": "end time OR duration string like '3 hours', '2 hrs', '90 minutes'",
     "description": "optional description",
     "location": "optional location",
     "participants": ["optional", "email", "addresses"]
@@ -265,10 +278,20 @@ If the user wants to schedule an event, respond with:
   "response": "Your friendly confirmation message to the user"
 }
 
-If the user is asking a question or chatting (not scheduling), respond with:
+IMPORTANT - When to check schedule vs direct scheduling:
+- "schedule 4hr study session on 11/7" -> check_schedule (no specific time)
+- "meeting 11/27 at 9pm for 3 hrs" -> schedule_event (specific time: 9pm)
+- "meeting tomorrow" -> check_schedule (no specific time)
+
+For end_time_str:
+- If exact end time: use the end time (e.g., "4pm")
+- If duration: use duration string (e.g., "3 hours")
+- If neither: use "1 hour" default
+
+If user is chatting (not scheduling):
 {
   "action": "chat",
-  "response": "Your helpful response to the user"
+  "response": "Your helpful response"
 }
 
 """
@@ -281,8 +304,33 @@ If the user is asking a question or chatting (not scheduling), respond with:
             "properties": {
                 "action": {
                     "type": "string",
-                    "description": "The action to take: 'schedule_event' or 'chat'",
-                    "enum": ["schedule_event", "chat"]
+                    "description": "The action to take",
+                    "enum": ["check_schedule", "schedule_event", "chat"]
+                },
+                "date": {
+                    "type": "string",
+                    "description": "Date to check schedule (for check_schedule action)"
+                },
+                "duration": {
+                    "type": "string",
+                    "description": "Required duration (for check_schedule action)"
+                },
+                "event_details": {
+                    "type": "object",
+                    "properties": {
+                        "summary": {
+                            "type": "string",
+                            "description": "Event title"
+                        },
+                        "description": {
+                            "type": "string",
+                            "description": "Optional description"
+                        },
+                        "location": {
+                            "type": "string",
+                            "description": "Optional location"
+                        }
+                    }
                 },
                 "event": {
                     "type": "object",
@@ -297,7 +345,7 @@ If the user is asking a question or chatting (not scheduling), respond with:
                         },
                         "end_time_str": {
                             "type": "string",
-                            "description": "Event end time"
+                            "description": "Event end time or duration"
                         },
                         "description": {
                             "type": "string",
@@ -312,8 +360,7 @@ If the user is asking a question or chatting (not scheduling), respond with:
                             "items": {"type": "string"},
                             "description": "Optional participant emails"
                         }
-                    },
-                    "required": ["summary", "start_time_str", "end_time_str"]
+                    }
                 },
                 "response": {
                     "type": "string",
@@ -344,11 +391,20 @@ If the user is asking a question or chatting (not scheduling), respond with:
 
             result = {
                 'content': structured_data.get('response', ''),
-                'tool_calls': []
+                'tool_calls': [],
+                'action': structured_data.get('action', 'chat')  # Include action in result
             }
 
+            # Handle check_schedule action
+            if structured_data.get('action') == 'check_schedule':
+                result['check_schedule'] = {
+                    'date': structured_data.get('date'),
+                    'duration': structured_data.get('duration'),
+                    'event_details': structured_data.get('event_details', {})
+                }
+
             # Convert to tool call format if action is schedule_event
-            if structured_data.get('action') == 'schedule_event' and 'event' in structured_data:
+            elif structured_data.get('action') == 'schedule_event' and 'event' in structured_data:
                 result['tool_calls'].append({
                     'id': 'gemini_structured_call',
                     'type': 'function',
@@ -364,7 +420,8 @@ If the user is asking a question or chatting (not scheduling), respond with:
             logger.error(f"Failed to parse Gemini structured output: {e}")
             return {
                 'content': response.text,
-                'tool_calls': []
+                'tool_calls': [],
+                'action': 'chat'
             }
 
     def _build_gemini_schema(self, schema_dict: Dict) -> Dict:
@@ -655,6 +712,19 @@ Be conversational and friendly. Confirm the details before scheduling."""
                 "content": response_data['content'],
                 "tool_calls": response_data.get('tool_calls')
             })
+
+            # Check for check_schedule action (Gemini specific)
+            if response_data.get('action') == 'check_schedule' and 'check_schedule' in response_data:
+                check_data = response_data['check_schedule']
+                logger.info(f"LLM requested to check schedule for: {check_data.get('date')} (duration: {check_data.get('duration')})")
+
+                return {
+                    'success': True,
+                    'response': response_data['content'],
+                    'action': 'check_schedule',
+                    'data': check_data,
+                    'provider': self.provider_name
+                }
 
             # Check if tool was called
             tool_calls = response_data.get('tool_calls', [])

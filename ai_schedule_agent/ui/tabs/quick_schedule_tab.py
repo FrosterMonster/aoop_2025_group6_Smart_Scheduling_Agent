@@ -137,7 +137,10 @@ class QuickScheduleTab:
         self.result_text.insert(tk.END, "Please review and click 'Schedule Event' to confirm.\n")
 
         # Populate the form fields
-        if parsed['action'] == 'create':
+        if parsed['action'] == 'check_schedule':
+            # Handle check_schedule action - find optimal slot first
+            self._handle_check_schedule_action(parsed)
+        elif parsed['action'] == 'create':
             # Clear existing form data
             for entry in self.form_entries.values():
                 entry.delete(0, tk.END)
@@ -234,6 +237,103 @@ class QuickScheduleTab:
                     self.result_text.insert(tk.END, "\n✅ No conflicts detected.\n")
 
         self.update_status("Form populated - review and click 'Schedule Event'")
+
+    def _handle_check_schedule_action(self, parsed):
+        """Handle check_schedule action by finding optimal slot and populating form"""
+        # Clear existing form data
+        for entry in self.form_entries.values():
+            entry.delete(0, tk.END)
+        self.tags_entry.delete(0, tk.END)
+
+        # Get target date and duration
+        target_date = parsed.get('target_date')
+        duration = parsed.get('duration', 60)  # minutes
+        title = parsed.get('title', 'New Event')
+        description = parsed.get('description', '')
+        location = parsed.get('location', '')
+        event_type = parsed.get('event_type', EventType.MEETING)
+        participants = parsed.get('participants', [])
+
+        # Display LLM response if available
+        if parsed.get('llm_response'):
+            self.result_text.insert(tk.END, f"\n💬 AI Response: {parsed['llm_response']}\n")
+            self.result_text.insert(tk.END, "=" * 60 + "\n")
+
+        # Create a temporary event to find optimal slot
+        temp_event = Event(
+            title=title,
+            event_type=event_type,
+            participants=participants,
+            location=location,
+            description=description
+        )
+
+        # Find optimal slot
+        if target_date:
+            # Search from the target date
+            optimal_slot = self.scheduling_engine.find_optimal_slot(
+                temp_event,
+                search_start=target_date,
+                duration=timedelta(minutes=duration)
+            )
+        else:
+            # Search from now
+            optimal_slot = self.scheduling_engine.find_optimal_slot(
+                temp_event,
+                duration=timedelta(minutes=duration)
+            )
+
+        if optimal_slot:
+            start_time, end_time = optimal_slot
+
+            # Populate form with optimal slot
+            self.form_entries['title'].insert(0, title)
+            if description:
+                self.form_entries['description'].insert(0, description)
+            if location:
+                self.form_entries['location'].insert(0, location)
+            if participants:
+                self.form_entries['participants'].insert(0, ', '.join(participants))
+
+            self.form_entries['date'].insert(0, start_time.strftime('%Y-%m-%d'))
+            self.form_entries['start_time'].insert(0, start_time.strftime('%H:%M'))
+
+            actual_duration = int((end_time - start_time).total_seconds() / 60)
+            self.form_entries['duration'].insert(0, str(actual_duration))
+
+            # Set event type
+            if isinstance(event_type, EventType):
+                self.event_type_var.set(event_type.value)
+
+            # Display success message
+            self.result_text.insert(tk.END, f"\n✅ Optimal time slot found:\n")
+            self.result_text.insert(tk.END, f"   📅 {start_time.strftime('%Y-%m-%d %H:%M')} - {end_time.strftime('%H:%M')}\n")
+            self.result_text.insert(tk.END, f"   ⏱️  Duration: {actual_duration} minutes\n")
+            self.result_text.insert(tk.END, "\n💡 This time slot avoids conflicts with your existing schedule.\n")
+            self.result_text.insert(tk.END, "Please review and click 'Schedule Event' to confirm.\n")
+
+            self.update_status("Optimal time slot found - review and confirm")
+        else:
+            # No optimal slot found
+            self.result_text.insert(tk.END, f"\n⚠️ No available time slot found for the requested date/time.\n")
+
+            # Still populate what we have
+            self.form_entries['title'].insert(0, title)
+            if description:
+                self.form_entries['description'].insert(0, description)
+            if location:
+                self.form_entries['location'].insert(0, location)
+            if participants:
+                self.form_entries['participants'].insert(0, ', '.join(participants))
+
+            self.form_entries['duration'].insert(0, str(duration))
+
+            # Set event type
+            if isinstance(event_type, EventType):
+                self.event_type_var.set(event_type.value)
+
+            self.result_text.insert(tk.END, "Please manually specify a date and time, or try a different date.\n")
+            self.update_status("No optimal slot found - please specify time manually")
 
     def schedule_event_from_form(self):
         """Schedule event from detailed form"""

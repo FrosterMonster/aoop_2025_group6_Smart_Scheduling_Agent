@@ -93,7 +93,11 @@ class NLPProcessor:
                 logger.info(f"Processing with LLM: '{text}'")
                 llm_result = self.llm_agent.process_request(text)
 
-                if llm_result.get('success') and llm_result.get('action') == 'schedule_event':
+                if llm_result.get('success') and llm_result.get('action') == 'check_schedule':
+                    # LLM requested to check schedule first
+                    logger.info("LLM requested schedule check before scheduling")
+                    return self._handle_check_schedule(llm_result, text)
+                elif llm_result.get('success') and llm_result.get('action') == 'schedule_event':
                     # Convert LLM result to expected format
                     return self._convert_llm_result_to_dict(llm_result, text)
                 elif llm_result.get('success') and llm_result.get('action') == 'conversation':
@@ -269,6 +273,49 @@ class NLPProcessor:
 
         return result
 
+    def _handle_check_schedule(self, llm_result: Dict, original_text: str) -> Dict:
+        """Handle check_schedule action from LLM
+
+        Args:
+            llm_result: Result from LLM with check_schedule action
+            original_text: Original user input
+
+        Returns:
+            Dictionary with check_schedule information for finding optimal time
+        """
+        data = llm_result.get('data', {})
+        event_details = data.get('event_details', {})
+
+        # Parse the date
+        date_str = data.get('date')
+        target_date = None
+        if date_str:
+            target_date = parse_nl_time(date_str, prefer_future=True)
+            if not target_date:
+                target_date = dateparser.parse(date_str, settings={'PREFER_DATES_FROM': 'future'})
+
+        # Parse duration
+        from ai_schedule_agent.utils.time_parser import parse_duration
+        duration_str = data.get('duration', '1 hour')
+        duration_td = parse_duration(duration_str)
+        duration = int(duration_td.total_seconds() / 60) if duration_td else 60  # minutes
+
+        result = {
+            'action': 'check_schedule',
+            'target_date': target_date,
+            'duration': duration,
+            'title': event_details.get('summary', 'New Event'),
+            'description': event_details.get('description'),
+            'location': event_details.get('location'),
+            'llm_mode': True,
+            'llm_response': llm_result.get('response'),
+            'event_type': EventType.MEETING,  # Default
+            'participants': []
+        }
+
+        logger.info(f"Check schedule request: date={target_date}, duration={duration}min")
+        return result
+
     def _convert_llm_result_to_dict(self, llm_result: Dict, original_text: str) -> Dict:
         """Convert LLM processing result to standard dict format
 
@@ -294,16 +341,32 @@ class NLPProcessor:
                 # Fallback to dateparser
                 start_time = dateparser.parse(start_time_str, settings={'PREFER_DATES_FROM': 'future'})
 
-        if end_time_str:
-            end_time = parse_nl_time(end_time_str, prefer_future=True)
-            if not end_time:
-                # Fallback to dateparser
-                end_time = dateparser.parse(end_time_str, settings={'PREFER_DATES_FROM': 'future'})
-
-        # Calculate duration if both times available
+        # Check if end_time_str is a duration string or an actual end time
         duration = None
-        if start_time and end_time:
-            duration = int((end_time - start_time).total_seconds() / 60)  # minutes
+        if end_time_str:
+            # Try to parse as duration first (e.g., "3 hours", "90 minutes", "2 hrs")
+            from ai_schedule_agent.utils.time_parser import parse_duration
+            duration_td = parse_duration(end_time_str)
+
+            if duration_td:
+                # It's a duration string
+                duration = int(duration_td.total_seconds() / 60)  # Convert to minutes
+                logger.debug(f"Parsed duration from end_time_str: {duration} minutes")
+
+                # Calculate end_time from start_time + duration
+                if start_time:
+                    end_time = start_time + duration_td
+            else:
+                # Not a duration, try to parse as actual end time
+                end_time = parse_nl_time(end_time_str, prefer_future=True)
+                if not end_time:
+                    # Fallback to dateparser
+                    end_time = dateparser.parse(end_time_str, settings={'PREFER_DATES_FROM': 'future'})
+
+                # Calculate duration if both times available
+                if start_time and end_time:
+                    duration = int((end_time - start_time).total_seconds() / 60)  # minutes
+                    logger.debug(f"Calculated duration from time difference: {duration} minutes")
 
         result = {
             'action': 'create',

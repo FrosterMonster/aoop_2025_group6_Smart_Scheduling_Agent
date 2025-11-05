@@ -35,9 +35,18 @@ class SchedulingEngine:
 
         # Get existing events
         search_end = search_start + timedelta(days=search_days)
+
+        # Convert to UTC for Google Calendar API (which expects UTC with 'Z' suffix)
+        if hasattr(search_start, 'tzinfo') and search_start.tzinfo is not None:
+            search_start_utc = search_start.astimezone(datetime.timezone.utc)
+            search_end_utc = search_end.astimezone(datetime.timezone.utc)
+        else:
+            search_start_utc = search_start
+            search_end_utc = search_end
+
         existing_events = self.calendar.get_events(
-            search_start.isoformat() + 'Z',
-            search_end.isoformat() + 'Z'
+            search_start_utc.isoformat().replace('+00:00', 'Z'),
+            search_end_utc.isoformat().replace('+00:00', 'Z')
         )
 
         # Convert to busy slots (make timezone-naive for comparison)
@@ -131,9 +140,20 @@ class SchedulingEngine:
             return conflicts
 
         # Get events in the same timeframe
+        # Convert to UTC for Google Calendar API
+        time_min = event.start_time - timedelta(hours=1)
+        time_max = event.end_time + timedelta(hours=1)
+
+        if hasattr(time_min, 'tzinfo') and time_min.tzinfo is not None:
+            time_min_utc = time_min.astimezone(datetime.timezone.utc)
+            time_max_utc = time_max.astimezone(datetime.timezone.utc)
+        else:
+            time_min_utc = time_min
+            time_max_utc = time_max
+
         existing_events = self.calendar.get_events(
-            (event.start_time - timedelta(hours=1)).isoformat() + 'Z',
-            (event.end_time + timedelta(hours=1)).isoformat() + 'Z'
+            time_min_utc.isoformat().replace('+00:00', 'Z'),
+            time_max_utc.isoformat().replace('+00:00', 'Z')
         )
 
         for e in existing_events:
