@@ -41,7 +41,7 @@ class ModernSchedulerUI:
         self.user_profile = self.load_or_create_profile()
         self.calendar = CalendarIntegration()
         self.engine = SchedulingEngine(self.user_profile, self.calendar)
-        self.nlp_processor = NLPProcessor()
+        self.nlp_processor = NLPProcessor(calendar=self.calendar)
         self.notification_manager = NotificationManager(self.user_profile.email)
 
         # UI state

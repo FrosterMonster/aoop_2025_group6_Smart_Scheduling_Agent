@@ -14,14 +14,16 @@ from ai_schedule_agent.utils.time_parser import parse_nl_time
 class NLPProcessor:
     """Natural Language Processing for scheduling requests with LLM and rule-based fallback"""
 
-    def __init__(self, use_llm: Optional[bool] = None):
+    def __init__(self, use_llm: Optional[bool] = None, calendar=None):
         """Initialize NLP Processor
 
         Args:
             use_llm: If True, use LLM for processing. If False, use rule-based.
                      If None, auto-detect based on config and API key availability.
+            calendar: Optional calendar integration for schedule checking
         """
         self.config = ConfigManager()
+        self.calendar = calendar
 
         # Determine if LLM should be used
         if use_llm is None:
@@ -273,15 +275,222 @@ class NLPProcessor:
 
         return result
 
+    def _ask_llm_for_optimal_time(self, target_date, duration, title, description, location, original_request):
+        """Ask LLM to analyze calendar and suggest optimal time slots
+
+        Args:
+            target_date: Target date for the event (or None for flexible)
+            duration: Duration in minutes
+            title: Event title
+            description: Event description
+            location: Event location
+            original_request: Original user request
+
+        Returns:
+            Dictionary with suggested_start_time, suggested_end_time, and reasoning
+        """
+        if not self.calendar:
+            logger.warning("No calendar available for schedule checking")
+            return None
+
+        # Ensure LLM is initialized
+        self._ensure_llm_initialized()
+        if not self.llm_agent or not self.use_llm:
+            logger.warning("LLM not available for schedule analysis")
+            return None
+
+        import datetime
+        from datetime import timedelta
+
+        # Determine search range
+        if target_date:
+            search_start = target_date.replace(hour=0, minute=0, second=0, microsecond=0)
+            search_days = 3  # Check target day and next 2 days
+        else:
+            search_start = datetime.datetime.now()
+            search_days = 7  # Check next week
+
+        search_end = search_start + timedelta(days=search_days)
+
+        # Convert to UTC for Google Calendar API
+        if hasattr(search_start, 'tzinfo') and search_start.tzinfo is not None:
+            search_start_utc = search_start.astimezone(datetime.timezone.utc)
+            search_end_utc = search_end.astimezone(datetime.timezone.utc)
+        else:
+            search_start_utc = search_start
+            search_end_utc = search_end
+
+        # Fetch existing events
+        try:
+            existing_events = self.calendar.get_events(
+                search_start_utc.isoformat().replace('+00:00', 'Z'),
+                search_end_utc.isoformat().replace('+00:00', 'Z')
+            )
+        except Exception as e:
+            logger.error(f"Failed to fetch calendar events: {e}")
+            return None
+
+        # Format events for LLM
+        events_summary = self._format_events_for_llm(existing_events, search_start, search_end)
+
+        # Ask LLM to find optimal time
+        max_attempts = 3 if not target_date else 1  # Try multiple dates if flexible
+        for attempt in range(max_attempts):
+            if attempt > 0:
+                # Expand search window for subsequent attempts
+                search_start = search_start + timedelta(days=attempt * 3)
+                search_end = search_end + timedelta(days=attempt * 3)
+
+                # Fetch events for new window
+                search_start_utc = search_start.astimezone(datetime.timezone.utc)
+                search_end_utc = search_end.astimezone(datetime.timezone.utc)
+                existing_events = self.calendar.get_events(
+                    search_start_utc.isoformat().replace('+00:00', 'Z'),
+                    search_end_utc.isoformat().replace('+00:00', 'Z')
+                )
+                events_summary = self._format_events_for_llm(existing_events, search_start, search_end)
+
+            prompt = self._build_schedule_analysis_prompt(
+                events_summary=events_summary,
+                duration=duration,
+                title=title,
+                description=description,
+                location=location,
+                original_request=original_request,
+                search_start=search_start,
+                search_end=search_end
+            )
+
+            logger.info(f"Asking LLM to analyze schedule (attempt {attempt + 1}/{max_attempts})")
+
+            # Use the LLM agent's underlying provider to get a direct text response
+            try:
+                # Call the LLM with a simple text prompt (not structured)
+                messages = [{"role": "user", "content": prompt}]
+                response = self.llm_agent.provider.call_llm(
+                    messages=messages,
+                    tools=[],  # No tools, just want text response
+                    max_tokens=500
+                )
+
+                llm_response = response.get('content', '')
+                suggested_time = self._parse_llm_time_suggestion(llm_response)
+
+                if suggested_time:
+                    logger.info(f"LLM suggested time: {suggested_time}")
+                    return suggested_time
+            except Exception as e:
+                logger.warning(f"LLM schedule analysis failed: {e}")
+
+        logger.warning("LLM could not find optimal time after multiple attempts")
+        return None
+
+    def _format_events_for_llm(self, events, search_start, search_end):
+        """Format calendar events for LLM analysis"""
+        if not events:
+            return f"No events scheduled between {search_start.strftime('%Y-%m-%d')} and {search_end.strftime('%Y-%m-%d')}."
+
+        formatted = []
+        formatted.append(f"Existing events from {search_start.strftime('%Y-%m-%d')} to {search_end.strftime('%Y-%m-%d')}:")
+        formatted.append("")
+
+        import datetime as dt
+        for event in events:
+            summary = event.get('summary', 'Untitled')
+            start = event.get('start', {})
+            end = event.get('end', {})
+
+            if 'dateTime' in start:
+                start_dt = dt.datetime.fromisoformat(start['dateTime'].replace('Z', '+00:00'))
+                end_dt = dt.datetime.fromisoformat(end['dateTime'].replace('Z', '+00:00'))
+
+                # Convert to local timezone for display
+                import pytz
+                local_tz = pytz.timezone('Asia/Taipei')
+                start_local = start_dt.astimezone(local_tz)
+                end_local = end_dt.astimezone(local_tz)
+
+                formatted.append(f"- {summary}")
+                formatted.append(f"  {start_local.strftime('%Y-%m-%d %H:%M')} - {end_local.strftime('%H:%M')}")
+
+        return "\n".join(formatted)
+
+    def _build_schedule_analysis_prompt(self, events_summary, duration, title, description, location, original_request, search_start, search_end):
+        """Build prompt for LLM to analyze schedule and suggest time"""
+        prompt = f"""Analyze the following schedule and find the optimal time slot for a new event.
+
+USER REQUEST: {original_request}
+
+EVENT DETAILS:
+- Title: {title}
+- Duration: {duration} minutes ({duration // 60} hours {duration % 60} minutes)
+- Description: {description or 'N/A'}
+- Location: {location or 'N/A'}
+
+{events_summary}
+
+TASK:
+Please analyze the schedule and suggest the BEST time slot for this event that:
+1. Does NOT conflict with existing events
+2. Falls within normal working hours (9 AM - 6 PM preferred, unless user specified otherwise)
+3. Allows for reasonable breaks between meetings (at least 15 minutes)
+4. Considers the user's request (if they specified a day or time preference)
+
+RESPONSE FORMAT:
+Suggest a specific start time in the format: YYYY-MM-DD HH:MM
+Explain your reasoning briefly.
+
+Example response:
+"I suggest scheduling this event on 2025-11-07 at 10:00.
+Reasoning: This time slot is free, falls in the morning when you're typically most productive, and provides a buffer after your 9:00 AM meeting."
+
+Your suggestion:"""
+
+        return prompt
+
+    def _parse_llm_time_suggestion(self, llm_response):
+        """Parse LLM response to extract suggested time"""
+        import re
+        import datetime
+        import dateparser
+
+        # Try to find datetime in format YYYY-MM-DD HH:MM
+        pattern = r'(\d{4}-\d{2}-\d{2})\s+(?:at\s+)?(\d{1,2}):(\d{2})'
+        match = re.search(pattern, llm_response)
+
+        if match:
+            date_str = match.group(1)
+            hour = int(match.group(2))
+            minute = int(match.group(3))
+
+            try:
+                suggested_start = datetime.datetime.strptime(date_str, '%Y-%m-%d')
+                suggested_start = suggested_start.replace(hour=hour, minute=minute)
+
+                # Add timezone
+                import pytz
+                local_tz = pytz.timezone('Asia/Taipei')
+                suggested_start = local_tz.localize(suggested_start)
+
+                return {
+                    'start_time': suggested_start,
+                    'reasoning': llm_response
+                }
+            except Exception as e:
+                logger.warning(f"Failed to parse time suggestion: {e}")
+
+        logger.warning(f"Could not parse time from LLM response: {llm_response[:200]}")
+        return None
+
     def _handle_check_schedule(self, llm_result: Dict, original_text: str) -> Dict:
-        """Handle check_schedule action from LLM
+        """Handle check_schedule action from LLM by fetching calendar and asking LLM to find optimal time
 
         Args:
             llm_result: Result from LLM with check_schedule action
             original_text: Original user input
 
         Returns:
-            Dictionary with check_schedule information for finding optimal time
+            Dictionary with check_schedule information including LLM-suggested time
         """
         data = llm_result.get('data', {})
         event_details = data.get('event_details', {})
@@ -300,20 +509,37 @@ class NLPProcessor:
         duration_td = parse_duration(duration_str)
         duration = int(duration_td.total_seconds() / 60) if duration_td else 60  # minutes
 
+        # Get title and other details
+        title = event_details.get('summary', 'New Event')
+        description = event_details.get('description', '')
+        location = event_details.get('location', '')
+
+        logger.info(f"Check schedule request: date={target_date}, duration={duration}min, title={title}")
+
+        # Now fetch calendar events and ask LLM to find optimal time
+        suggested_time = self._ask_llm_for_optimal_time(
+            target_date=target_date,
+            duration=duration,
+            title=title,
+            description=description,
+            location=location,
+            original_request=original_text
+        )
+
         result = {
             'action': 'check_schedule',
             'target_date': target_date,
             'duration': duration,
-            'title': event_details.get('summary', 'New Event'),
-            'description': event_details.get('description'),
-            'location': event_details.get('location'),
+            'title': title,
+            'description': description,
+            'location': location,
             'llm_mode': True,
             'llm_response': llm_result.get('response'),
-            'event_type': EventType.MEETING,  # Default
-            'participants': []
+            'event_type': EventType.MEETING,
+            'participants': [],
+            'suggested_time': suggested_time  # LLM-suggested optimal time
         }
 
-        logger.info(f"Check schedule request: date={target_date}, duration={duration}min")
         return result
 
     def _convert_llm_result_to_dict(self, llm_result: Dict, original_text: str) -> Dict:

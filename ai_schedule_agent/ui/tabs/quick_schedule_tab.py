@@ -1,5 +1,6 @@
 """Quick schedule tab for natural language and form-based scheduling"""
 
+import datetime
 import tkinter as tk
 from tkinter import ttk, messagebox, scrolledtext
 from datetime import timedelta
@@ -112,35 +113,37 @@ class QuickScheduleTab:
         # Parse the input
         parsed = self.nlp_processor.parse_scheduling_request(text)
 
-        # Display parsed information
+        # Clear result display
         self.result_text.delete(1.0, tk.END)
-        self.result_text.insert(tk.END, "✅ Parsed Natural Language Input\n")
-        self.result_text.insert(tk.END, "=" * 60 + "\n\n")
 
-        # Display parsed fields in a nicer format
-        if parsed.get('title'):
-            self.result_text.insert(tk.END, f"  📌 Title: {parsed['title']}\n")
-        if parsed.get('datetime'):
-            self.result_text.insert(tk.END, f"  📅 Date/Time: {parsed['datetime'].strftime('%Y-%m-%d %H:%M')}\n")
-        if parsed.get('duration'):
-            self.result_text.insert(tk.END, f"  ⏱️  Duration: {parsed['duration']} minutes\n")
-        if parsed.get('location'):
-            self.result_text.insert(tk.END, f"  📍 Location: {parsed['location']}\n")
-        if parsed.get('participants'):
-            self.result_text.insert(tk.END, f"  👥 Participants: {', '.join(parsed['participants'])}\n")
-        if parsed.get('event_type'):
-            event_type_str = parsed['event_type'].value if hasattr(parsed['event_type'], 'value') else str(parsed['event_type'])
-            self.result_text.insert(tk.END, f"  🏷️  Type: {event_type_str}\n")
-
-        self.result_text.insert(tk.END, "\n" + "=" * 60 + "\n")
-        self.result_text.insert(tk.END, "📝 Form populated with parsed data.\n")
-        self.result_text.insert(tk.END, "Please review and click 'Schedule Event' to confirm.\n")
-
-        # Populate the form fields
+        # Handle different actions
         if parsed['action'] == 'check_schedule':
             # Handle check_schedule action - find optimal slot first
             self._handle_check_schedule_action(parsed)
         elif parsed['action'] == 'create':
+            # Display parsed information
+            self.result_text.insert(tk.END, "✅ Parsed Natural Language Input\n")
+            self.result_text.insert(tk.END, "=" * 60 + "\n\n")
+
+            # Display parsed fields in a nicer format
+            if parsed.get('title'):
+                self.result_text.insert(tk.END, f"  📌 Title: {parsed['title']}\n")
+            if parsed.get('datetime'):
+                self.result_text.insert(tk.END, f"  📅 Date/Time: {parsed['datetime'].strftime('%Y-%m-%d %H:%M')}\n")
+            if parsed.get('duration'):
+                self.result_text.insert(tk.END, f"  ⏱️  Duration: {parsed['duration']} minutes\n")
+            if parsed.get('location'):
+                self.result_text.insert(tk.END, f"  📍 Location: {parsed['location']}\n")
+            if parsed.get('participants'):
+                self.result_text.insert(tk.END, f"  👥 Participants: {', '.join(parsed['participants'])}\n")
+            if parsed.get('event_type'):
+                event_type_str = parsed['event_type'].value if hasattr(parsed['event_type'], 'value') else str(parsed['event_type'])
+                self.result_text.insert(tk.END, f"  🏷️  Type: {event_type_str}\n")
+
+            self.result_text.insert(tk.END, "\n" + "=" * 60 + "\n")
+            self.result_text.insert(tk.END, "📝 Form populated with parsed data.\n")
+            self.result_text.insert(tk.END, "Please review and click 'Schedule Event' to confirm.\n")
+
             # Clear existing form data
             for entry in self.form_entries.values():
                 entry.delete(0, tk.END)
@@ -240,10 +243,9 @@ class QuickScheduleTab:
 
     def _handle_check_schedule_action(self, parsed):
         """Handle check_schedule action by finding optimal slot and populating form"""
-        # Clear existing form data
-        for entry in self.form_entries.values():
-            entry.delete(0, tk.END)
-        self.tags_entry.delete(0, tk.END)
+        # Display parsed information
+        self.result_text.insert(tk.END, "🔍 Checking Schedule for Optimal Time Slot\n")
+        self.result_text.insert(tk.END, "=" * 60 + "\n\n")
 
         # Get target date and duration
         target_date = parsed.get('target_date')
@@ -254,34 +256,78 @@ class QuickScheduleTab:
         event_type = parsed.get('event_type', EventType.MEETING)
         participants = parsed.get('participants', [])
 
+        # Display parsed fields
+        self.result_text.insert(tk.END, f"  📌 Title: {title}\n")
+        if target_date:
+            self.result_text.insert(tk.END, f"  📅 Target Date: {target_date.strftime('%Y-%m-%d')}\n")
+        self.result_text.insert(tk.END, f"  ⏱️  Duration: {duration} minutes\n")
+        if location:
+            self.result_text.insert(tk.END, f"  📍 Location: {location}\n")
+        if participants:
+            self.result_text.insert(tk.END, f"  👥 Participants: {', '.join(participants)}\n")
+
         # Display LLM response if available
         if parsed.get('llm_response'):
-            self.result_text.insert(tk.END, f"\n💬 AI Response: {parsed['llm_response']}\n")
-            self.result_text.insert(tk.END, "=" * 60 + "\n")
+            self.result_text.insert(tk.END, f"\n💬 AI: {parsed['llm_response']}\n")
 
-        # Create a temporary event to find optimal slot
-        temp_event = Event(
-            title=title,
-            event_type=event_type,
-            participants=participants,
-            location=location,
-            description=description
-        )
+        self.result_text.insert(tk.END, "\n" + "=" * 60 + "\n")
 
-        # Find optimal slot
-        if target_date:
-            # Search from the target date
-            optimal_slot = self.scheduling_engine.find_optimal_slot(
-                temp_event,
-                search_start=target_date,
-                duration=timedelta(minutes=duration)
-            )
+        # Clear existing form data
+        for entry in self.form_entries.values():
+            entry.delete(0, tk.END)
+        self.tags_entry.delete(0, tk.END)
+
+        # Check if LLM has already suggested a time
+        suggested_time = parsed.get('suggested_time')
+
+        if suggested_time:
+            # Use LLM-suggested time
+            self.result_text.insert(tk.END, "🤖 AI analyzed your calendar and found optimal time...\n\n")
+
+            start_time = suggested_time['start_time']
+            end_time = start_time + timedelta(minutes=duration)
+
+            # Display LLM reasoning
+            reasoning = suggested_time.get('reasoning', '')
+            if reasoning:
+                # Extract just the reasoning part (after "Reasoning:")
+                reasoning_lines = reasoning.split('\n')
+                for line in reasoning_lines:
+                    if 'reasoning' in line.lower() or 'suggest' in line.lower():
+                        self.result_text.insert(tk.END, f"💡 {line.strip()}\n")
+
+            optimal_slot = (start_time, end_time)
         else:
-            # Search from now
-            optimal_slot = self.scheduling_engine.find_optimal_slot(
-                temp_event,
-                duration=timedelta(minutes=duration)
+            # Fallback to traditional scheduling engine
+            self.result_text.insert(tk.END, "🔎 Searching for available time slots...\n\n")
+
+            # Create a temporary event to find optimal slot
+            # Set temporary start/end times to indicate desired duration
+            temp_start = target_date if target_date else datetime.datetime.now()
+            temp_end = temp_start + timedelta(minutes=duration)
+
+            temp_event = Event(
+                title=title,
+                event_type=event_type,
+                participants=participants,
+                location=location,
+                description=description,
+                start_time=temp_start,
+                end_time=temp_end
             )
+
+            # Find optimal slot
+            if target_date:
+                # Search from the target date
+                optimal_slot = self.scheduling_engine.find_optimal_slot(
+                    temp_event,
+                    search_start=target_date
+                )
+            else:
+                # Search from now
+                optimal_slot = self.scheduling_engine.find_optimal_slot(
+                    temp_event
+                )
 
         if optimal_slot:
             start_time, end_time = optimal_slot
@@ -337,8 +383,6 @@ class QuickScheduleTab:
 
     def schedule_event_from_form(self):
         """Schedule event from detailed form"""
-        import datetime
-
         try:
             # Collect form data
             title = self.form_entries['title'].get()
