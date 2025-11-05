@@ -56,12 +56,12 @@ class ModernTheme:
 
     # Consultation Type Colors (matching reference design)
     CONSULTATION_COLORS = {
-        'meeting': '#9B7FED',           # Purple - Psychotherapy
-        'focus': '#5B9FED',             # Blue - Cognitive behavioral
-        'break': '#6BCF9F',             # Green - Group therapy
-        'personal': '#FFAB6B',          # Orange - Family therapy
-        'task': '#ED7FA8',              # Pink - Mindfulness
-        'other': '#5ED4D2',             # Teal - Other
+        'meeting': '#9B7FED',           # Purple 
+        'focus': '#5B9FED',             # Blue 
+        'break': '#6BCF9F',             # Green 
+        'personal': '#FFAB6B',          # Orange 
+        'task': '#ED7FA8',              # Pink 
+        'other': '#5ED4D2',             # Teal 
     }
 
     # Spacing System

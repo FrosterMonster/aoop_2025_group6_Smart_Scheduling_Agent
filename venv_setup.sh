@@ -81,48 +81,68 @@ fi
 
 echo ""
 
-# Step 2: Remove old venv if exists
+# Step 2: Check or create virtual environment
 echo "Step 2: Setting up virtual environment..."
 print_detail "Checking for existing virtual environment..."
+
+VENV_EXISTS=false
+VENV_PYTHON=""
+
 if [ -d "venv" ]; then
     VENV_SIZE=$(du -sh venv 2>/dev/null | cut -f1)
-    print_warning "Existing venv found (size: $VENV_SIZE)"
-    print_detail "Removing old virtual environment..."
-    rm -rf venv
-    print_success "Old venv removed"
-else
-    print_detail "No existing venv found"
+    print_info "Existing venv found (size: $VENV_SIZE)"
+
+    # Locate Python in existing venv
+    if [ -f "venv/Scripts/python.exe" ]; then
+        VENV_PYTHON="./venv/Scripts/python.exe"
+    elif [ -f "venv/bin/python" ]; then
+        VENV_PYTHON="./venv/bin/python"
+    fi
+
+    # Check if venv is valid
+    if [ -n "$VENV_PYTHON" ] && $VENV_PYTHON --version &> /dev/null; then
+        VENV_EXISTS=true
+        VENV_PYTHON_VERSION=$($VENV_PYTHON --version 2>&1 | awk '{print $2}')
+        print_success "Valid venv found - Python $VENV_PYTHON_VERSION"
+        print_detail "Skipping venv creation (will only update packages)"
+    else
+        print_warning "Existing venv is broken"
+        print_detail "Removing and recreating..."
+        rm -rf venv
+    fi
 fi
 
-# Create new venv
-print_info "Creating new virtual environment..."
-print_detail "Running: $PYTHON_CMD -m venv venv"
-$PYTHON_CMD -m venv venv
+# Create new venv only if needed
+if [ "$VENV_EXISTS" = false ]; then
+    print_info "Creating new virtual environment..."
+    print_detail "Running: $PYTHON_CMD -m venv venv"
+    $PYTHON_CMD -m venv venv
 
-if [ ! -d "venv" ]; then
-    print_error "Failed to create virtual environment"
-    exit 1
+    if [ ! -d "venv" ]; then
+        print_error "Failed to create virtual environment"
+        exit 1
+    fi
+
+    print_success "Virtual environment created"
+    VENV_SIZE=$(du -sh venv 2>/dev/null | cut -f1)
+    print_detail "Virtual environment size: $VENV_SIZE"
+
+    # Locate Python in new venv
+    if [ -f "venv/Scripts/python.exe" ]; then
+        VENV_PYTHON="./venv/Scripts/python.exe"
+        print_detail "Windows venv detected: $VENV_PYTHON"
+    elif [ -f "venv/bin/python" ]; then
+        VENV_PYTHON="./venv/bin/python"
+        print_detail "Unix/Linux venv detected: $VENV_PYTHON"
+    else
+        print_error "Cannot find Python in venv"
+        exit 1
+    fi
+    VENV_PYTHON_VERSION=$($VENV_PYTHON --version 2>&1 | awk '{print $2}')
+    print_detail "Virtual environment Python version: $VENV_PYTHON_VERSION"
 fi
 
-print_success "Virtual environment created"
-VENV_SIZE=$(du -sh venv 2>/dev/null | cut -f1)
-print_detail "Virtual environment size: $VENV_SIZE"
 echo ""
-
-# Step 3: Determine the correct Python path
-print_detail "Locating Python in virtual environment..."
-if [ -f "venv/Scripts/python.exe" ]; then
-    VENV_PYTHON="./venv/Scripts/python.exe"
-    print_detail "Windows venv detected: $VENV_PYTHON"
-elif [ -f "venv/bin/python" ]; then
-    VENV_PYTHON="./venv/bin/python"
-    print_detail "Unix/Linux venv detected: $VENV_PYTHON"
-else
-    print_error "Cannot find Python in venv"
-    exit 1
-fi
-VENV_PYTHON_VERSION=$($VENV_PYTHON --version 2>&1 | awk '{print $2}')
-print_detail "Virtual environment Python version: $VENV_PYTHON_VERSION"
 
 # Step 4: Upgrade pip
 echo "Step 3: Upgrading pip..."
@@ -135,36 +155,70 @@ NEW_PIP_VERSION=$($VENV_PYTHON -m pip --version 2>&1 | awk '{print $2}')
 print_success "Pip upgraded: $OLD_PIP_VERSION → $NEW_PIP_VERSION"
 echo ""
 
-# Step 5: Install dependencies
-echo "Step 4: Installing Python packages..."
-print_info "This may take a few minutes..."
+# Step 5: Install/Update dependencies
+echo "Step 4: Checking and installing Python packages..."
 print_detail "Reading requirements from: requirements.txt"
 
-# Count packages to install
+# Count packages in requirements
 PACKAGE_COUNT=$(grep -v '^#' requirements.txt | grep -v '^$' | wc -l)
 print_detail "Found $PACKAGE_COUNT package requirements"
 
-# Show what packages will be installed
-echo ""
-print_detail "Key packages to install:"
-print_detail "  • Google Calendar API (google-auth, google-api-python-client)"
-print_detail "  • LLM Integration (openai, anthropic, python-dotenv)"
-print_detail "  • NLP Processing (spacy, dateparser)"
-print_detail "  • Timezone Support (pytz)"
-print_detail "  • Scientific Computing (numpy, scikit-learn)"
-echo ""
+# Check what's already installed
+print_detail "Checking installed packages..."
+INSTALLED_BEFORE=$($VENV_PYTHON -m pip list --format=freeze 2>/dev/null | wc -l)
+print_detail "Currently installed: $INSTALLED_BEFORE packages"
 
-print_detail "Installing packages (this will take 2-5 minutes)..."
-$VENV_PYTHON -m pip install -r requirements.txt
+# Check which required packages are missing
+echo ""
+print_detail "Analyzing required packages..."
+MISSING_PACKAGES=()
+REQUIRED_PACKAGES=("google-auth" "google-api-python-client" "openai" "anthropic" "spacy" "dateparser" "python-dotenv" "pytz" "numpy" "scikit-learn")
 
-if [ $? -eq 0 ]; then
-    print_success "All packages installed successfully"
-    INSTALLED_COUNT=$($VENV_PYTHON -m pip list | wc -l)
-    print_detail "Total packages in environment: $INSTALLED_COUNT"
+for pkg in "${REQUIRED_PACKAGES[@]}"; do
+    if ! $VENV_PYTHON -c "import ${pkg//-/_}" 2>/dev/null; then
+        MISSING_PACKAGES+=("$pkg")
+    fi
+done
+
+if [ ${#MISSING_PACKAGES[@]} -eq 0 ]; then
+    print_success "All required packages already installed!"
+    print_info "Running upgrade check for outdated packages..."
+    print_detail "Checking for package updates..."
+
+    # Only check for updates, don't automatically upgrade unless needed
+    OUTDATED=$($VENV_PYTHON -m pip list --outdated --format=columns 2>/dev/null | tail -n +3 | wc -l)
+
+    if [ $OUTDATED -gt 0 ]; then
+        print_info "$OUTDATED packages have updates available"
+        print_detail "To update all: $VENV_PYTHON -m pip install -U -r requirements.txt"
+    else
+        print_success "All packages are up to date"
+    fi
 else
-    print_error "Package installation failed"
-    exit 1
+    print_info "Missing packages: ${#MISSING_PACKAGES[@]}"
+    for pkg in "${MISSING_PACKAGES[@]}"; do
+        print_detail "  • $pkg"
+    done
+    echo ""
+
+    print_detail "Installing missing packages..."
+    $VENV_PYTHON -m pip install -r requirements.txt --quiet
+
+    if [ $? -eq 0 ]; then
+        print_success "Packages installed successfully"
+        INSTALLED_AFTER=$($VENV_PYTHON -m pip list --format=freeze 2>/dev/null | wc -l)
+        NEW_PACKAGES=$((INSTALLED_AFTER - INSTALLED_BEFORE))
+        print_detail "Installed $NEW_PACKAGES new packages"
+    else
+        print_error "Package installation failed"
+        print_info "Trying verbose installation..."
+        $VENV_PYTHON -m pip install -r requirements.txt
+        exit 1
+    fi
 fi
+
+INSTALLED_COUNT=$($VENV_PYTHON -m pip list | wc -l)
+print_detail "Total packages in environment: $INSTALLED_COUNT"
 echo ""
 
 # Step 6: Download spacy model

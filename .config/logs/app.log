@@ -174,3 +174,84 @@ anthropic.BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type':
 2025-11-05 18:36:56,379 - WARNING - LLM processing failed, falling back to rule-based NLP
 2025-11-05 18:36:56,382 - INFO - Processing with rule-based NLP: 'eecamp meeting 11/27 pm9:00 at nycu last 3 hr'
 2025-11-05 18:36:56,469 - INFO - NLP Parse: 'eecamp meeting 11/27 pm9:00 at nycu last 3 hr' -> {'action': 'create', 'event_type': <EventType.MEETING: 'meeting'>, 'participants': [], 'datetime': None, 'duration': None, 'location': None, 'title': 'eecamp meeting 11/27 pm9:00 at nycu last 3 hr', 'description': None, 'llm_mode': False}
+2025-11-05 18:52:42,801 - INFO - Logging initialized - Level: INFO, Handlers: 2
+2025-11-05 18:53:10,475 - INFO - I18n initialized with language: en
+2025-11-05 18:53:10,478 - INFO - Modern UI theme configured with glassmorphism and neumorphism effects
+2025-11-05 18:53:10,492 - INFO - NLP Processor initialized (lazy loading enabled)
+2025-11-05 18:53:10,495 - INFO - Setting up UI...
+2025-11-05 18:53:10,499 - INFO - Loading Quick Schedule tab...
+2025-11-05 18:53:10,690 - INFO - Loading Calendar View tab...
+2025-11-05 18:53:10,857 - INFO - file_cache is only supported with oauth2client<4.0.0
+2025-11-05 18:53:11,917 - INFO - Loading Settings tab...
+2025-11-05 18:53:11,983 - INFO - Creating Insights tab placeholder...
+2025-11-05 18:53:11,988 - INFO - UI setup complete (Insights tab will load on demand)
+2025-11-05 18:54:28,743 - INFO - Loading Insights tab for first time (loading numpy...)...
+2025-11-05 18:54:28,803 - INFO - Insights tab loaded successfully
+2025-11-05 21:02:56,932 - INFO - Logging initialized - Level: INFO, Handlers: 2
+2025-11-05 21:03:00,442 - INFO - I18n initialized with language: en
+2025-11-05 21:03:00,444 - INFO - Modern UI theme configured with glassmorphism and neumorphism effects
+2025-11-05 21:03:00,470 - INFO - NLP Processor initialized (lazy loading enabled)
+2025-11-05 21:03:00,471 - INFO - Setting up UI...
+2025-11-05 21:03:00,476 - INFO - Loading Quick Schedule tab...
+2025-11-05 21:03:00,531 - INFO - Loading Calendar View tab...
+2025-11-05 21:03:02,047 - INFO - file_cache is only supported with oauth2client<4.0.0
+2025-11-05 21:03:03,341 - INFO - Loading Settings tab...
+2025-11-05 21:03:03,385 - INFO - Creating Insights tab placeholder...
+2025-11-05 21:03:03,385 - INFO - UI setup complete (Insights tab will load on demand)
+2025-11-05 21:03:59,120 - INFO - Logging initialized - Level: INFO, Handlers: 2
+2025-11-05 21:04:00,977 - INFO - I18n initialized with language: en
+2025-11-05 21:04:00,977 - INFO - Modern UI theme configured with glassmorphism and neumorphism effects
+2025-11-05 21:04:01,002 - INFO - NLP Processor initialized (lazy loading enabled)
+2025-11-05 21:04:01,002 - INFO - Setting up UI...
+2025-11-05 21:04:01,013 - INFO - Loading Quick Schedule tab...
+2025-11-05 21:04:01,069 - INFO - Loading Calendar View tab...
+2025-11-05 21:04:02,062 - INFO - file_cache is only supported with oauth2client<4.0.0
+2025-11-05 21:04:02,861 - INFO - Loading Settings tab...
+2025-11-05 21:04:02,918 - INFO - Creating Insights tab placeholder...
+2025-11-05 21:04:02,919 - INFO - UI setup complete (Insights tab will load on demand)
+2025-11-05 21:27:09,848 - INFO - Logging initialized - Level: INFO, Handlers: 2
+2025-11-05 21:27:13,785 - INFO - I18n initialized with language: en
+2025-11-05 21:27:13,786 - INFO - Modern healthcare UI theme configured
+2025-11-05 21:27:13,788 - INFO - NLP Processor initialized (lazy loading enabled)
+2025-11-05 21:27:13,788 - INFO - Setting up modern healthcare UI...
+2025-11-05 21:27:15,065 - INFO - Modern healthcare UI setup complete
+2025-11-05 21:28:02,426 - INFO - Calendar refreshed - View: day, Filters: {'meeting'}
+2025-11-05 21:28:11,020 - INFO - Calendar refreshed - View: day, Filters: {'meeting', 'focus'}
+2025-11-05 21:28:11,711 - INFO - Calendar refreshed - View: day, Filters: {'break', 'meeting', 'focus'}
+2025-11-05 21:28:12,093 - INFO - Calendar refreshed - View: day, Filters: {'break', 'meeting', 'personal', 'focus'}
+2025-11-05 21:28:13,475 - INFO - Calendar refreshed - View: day, Filters: {'personal', 'focus', 'break', 'meeting', 'other'}
+2025-11-05 21:28:13,775 - INFO - Calendar refreshed - View: day, Filters: {'personal', 'focus', 'break', 'task', 'meeting', 'other'}
+2025-11-05 21:28:14,333 - INFO - Calendar refreshed - View: day, Filters: {'personal', 'focus', 'break', 'meeting', 'other'}
+2025-11-05 21:28:14,628 - INFO - Calendar refreshed - View: day, Filters: {'personal', 'focus', 'break', 'meeting'}
+2025-11-05 21:28:15,243 - INFO - Calendar refreshed - View: day, Filters: {'focus', 'break', 'meeting'}
+2025-11-05 21:28:16,369 - INFO - Calendar refreshed - View: day, Filters: {'break', 'meeting'}
+2025-11-05 21:28:16,545 - INFO - Calendar refreshed - View: day, Filters: {'meeting'}
+2025-11-05 21:28:16,910 - INFO - Calendar refreshed - View: day, Filters: set()
+2025-11-05 21:28:18,597 - INFO - Calendar refreshed - View: week, Filters: set()
+2025-11-05 21:28:19,146 - INFO - Calendar refreshed - View: month, Filters: set()
+2025-11-05 21:28:19,879 - INFO - Calendar refreshed - View: month, Filters: set()
+2025-11-05 21:28:21,164 - INFO - Calendar refreshed - View: day, Filters: set()
+2025-11-05 21:28:22,534 - INFO - Calendar refreshed - View: day, Filters: set()
+2025-11-05 21:29:18,465 - INFO - Logging initialized - Level: INFO, Handlers: 2
+2025-11-05 21:29:20,238 - INFO - I18n initialized with language: en
+2025-11-05 21:29:20,239 - INFO - Modern healthcare UI theme configured
+2025-11-05 21:29:20,243 - INFO - NLP Processor initialized (lazy loading enabled)
+2025-11-05 21:29:20,244 - INFO - Setting up modern healthcare UI...
+2025-11-05 21:29:21,804 - INFO - Modern healthcare UI setup complete
+2025-11-05 21:29:34,570 - INFO - Calendar refreshed - View: day, Filters: {'personal'}
+2025-11-05 21:29:39,283 - INFO - Calendar refreshed - View: week, Filters: {'personal'}
+2025-11-05 21:29:39,616 - INFO - Calendar refreshed - View: month, Filters: {'personal'}
+2025-11-05 21:36:57,388 - INFO - Logging initialized - Level: INFO, Handlers: 2
+2025-11-05 21:37:00,422 - INFO - I18n initialized with language: en
+2025-11-05 21:37:00,424 - INFO - Modern healthcare UI theme configured
+2025-11-05 21:37:00,426 - INFO - NLP Processor initialized (lazy loading enabled)
+2025-11-05 21:37:00,426 - INFO - Setting up modern AI Schedule Agent UI...
+2025-11-05 21:37:01,773 - INFO - Loading Quick Schedule tab...
+2025-11-05 21:37:01,843 - INFO - Loading Calendar View tab...
+2025-11-05 21:37:01,924 - INFO - file_cache is only supported with oauth2client<4.0.0
+2025-11-05 21:37:03,182 - INFO - Loading Settings tab...
+2025-11-05 21:37:03,256 - INFO - Creating Insights tab placeholder...
+2025-11-05 21:37:03,257 - INFO - All tabs loaded
+2025-11-05 21:37:03,268 - INFO - Modern AI Schedule Agent UI setup complete
+2025-11-05 21:39:10,751 - INFO - Loading Insights tab for first time...
+2025-11-05 21:39:10,767 - INFO - Insights tab loaded

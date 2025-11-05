@@ -31,7 +31,14 @@ def main():
     # Defer imports until main() is called to speed up startup
     from ai_schedule_agent.config.manager import ConfigManager
     from ai_schedule_agent.ui.setup_wizard import SetupWizard
-    from ai_schedule_agent.ui.main_window import SchedulerUI
+
+    # Check for modern UI flag (can be set via environment variable or config)
+    use_modern_ui = os.environ.get('USE_MODERN_UI', 'true').lower() == 'true'
+
+    if use_modern_ui:
+        from ai_schedule_agent.ui.modern_main_window import ModernSchedulerUI as SchedulerUI
+    else:
+        from ai_schedule_agent.ui.main_window import SchedulerUI
 
     _import_end = time.time()
     import_time = (_import_end - _startup_start) * 1000  # Convert to ms
@@ -53,8 +60,9 @@ def main():
         wizard.run()
     else:
         # Run main application
+        ui_type = "Modern Healthcare UI" if use_modern_ui else "Classic Tabbed UI"
         print(f"⚡ Startup time: imports={import_time:.0f}ms, init={init_time:.0f}ms, total={(_init_end - _startup_start)*1000:.0f}ms")
-        print("Starting AI Schedule Agent...")
+        print(f"Starting AI Schedule Agent ({ui_type})...")
         app = SchedulerUI()
         app.run()
 
