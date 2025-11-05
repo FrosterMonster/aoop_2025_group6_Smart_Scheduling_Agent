@@ -59,20 +59,83 @@ def parse_nl_time(nl_time_str: str, prefer_future: bool = True, timezone: Option
     hour = None
     minute = 0
 
-    # Relative date detection (Chinese)
-    if '明天' in s or '明日' in s:
+    # Relative date detection (Chinese and English)
+    if '明天' in s or '明日' in s or 'tomorrow' in s.lower():
         base = now + timedelta(days=1)
-        logger.debug("Detected: 明天 (tomorrow)")
-    elif '今天' in s or '今日' in s:
+        logger.debug("Detected: 明天/tomorrow")
+    elif '今天' in s or '今日' in s or 'today' in s.lower():
         base = now
-        logger.debug("Detected: 今天 (today)")
-    elif '後天' in s:
+        logger.debug("Detected: 今天/today")
+    elif '後天' in s or 'day after tomorrow' in s.lower():
         base = now + timedelta(days=2)
-        logger.debug("Detected: 後天 (day after tomorrow)")
+        logger.debug("Detected: 後天/day after tomorrow")
+    elif '昨天' in s or '昨日' in s or 'yesterday' in s.lower():
+        base = now - timedelta(days=1)
+        logger.debug("Detected: 昨天/yesterday")
+
+    # Handle "next [day]" patterns (e.g., "next monday", "next friday")
+    next_day_match = re.search(r'next\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|wed|thu|fri|sat|sun)', s.lower())
+    if next_day_match and 'week' not in s.lower():  # Don't match if "week" is present (handled below)
+        day_name = next_day_match.group(1)
+        day_map = {
+            'monday': 0, 'mon': 0,
+            'tuesday': 1, 'tue': 1,
+            'wednesday': 2, 'wed': 2,
+            'thursday': 3, 'thu': 3,
+            'friday': 4, 'fri': 4,
+            'saturday': 5, 'sat': 5,
+            'sunday': 6, 'sun': 6
+        }
+        target_weekday = day_map.get(day_name)
+        if target_weekday is not None:
+            # Calculate days until next occurrence of target day
+            days_ahead = target_weekday - now.weekday()
+            if days_ahead <= 0:  # Target day already happened this week
+                days_ahead += 7  # Move to next week
+            base = now + timedelta(days=days_ahead)
+            logger.debug(f"Detected: next {day_name} -> +{days_ahead} days")
+
+    # Handle "next week [day]" patterns (e.g., "next week monday", "next week 星期一")
+    next_week_match = re.search(r'next\s+week\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|wed|thu|fri|sat|sun)', s.lower())
+    if next_week_match:
+        day_name = next_week_match.group(1)
+        day_map = {
+            'monday': 0, 'mon': 0,
+            'tuesday': 1, 'tue': 1,
+            'wednesday': 2, 'wed': 2,
+            'thursday': 3, 'thu': 3,
+            'friday': 4, 'fri': 4,
+            'saturday': 5, 'sat': 5,
+            'sunday': 6, 'sun': 6
+        }
+        target_weekday = day_map.get(day_name)
+        if target_weekday is not None:
+            # Calculate days until next week's target day
+            days_ahead = target_weekday - now.weekday()
+            if days_ahead <= 0:  # Target day already happened this week
+                days_ahead += 7  # Move to next week
+            days_ahead += 7  # Add another week for "next week"
+            base = now + timedelta(days=days_ahead)
+            logger.debug(f"Detected: next week {day_name} -> +{days_ahead} days")
+
+    # Handle "下週[day]" or "下周[day]" patterns (Chinese)
+    next_week_cn_match = re.search(r'下[週周]\s*([星期礼拜禮拜]?[一二三四五六日天])', s)
+    if next_week_cn_match:
+        day_char = next_week_cn_match.group(1)
+        day_char = day_char.replace('星期', '').replace('礼拜', '').replace('禮拜', '')
+        day_map_cn = {'一': 0, '二': 1, '三': 2, '四': 3, '五': 4, '六': 5, '日': 6, '天': 6}
+        target_weekday = day_map_cn.get(day_char)
+        if target_weekday is not None:
+            days_ahead = target_weekday - now.weekday()
+            if days_ahead <= 0:
+                days_ahead += 7
+            days_ahead += 7  # Add another week for "next week"
+            base = now + timedelta(days=days_ahead)
+            logger.debug(f"Detected: 下週{day_char} -> +{days_ahead} days")
 
     # If we found a relative date, try to extract time
     if base is not None:
-        # Extract hour from patterns like "下午2點", "晚上8點", "上午10點"
+        # Extract hour from patterns like "下午2點", "晚上8點", "上午10點", "2pm", etc.
         m = re.search(r'(\d{1,2})\s*[點点时時]', s)
         if m:
             hour = int(m.group(1))
@@ -95,7 +158,23 @@ def parse_nl_time(nl_time_str: str, prefer_future: bool = True, timezone: Option
                 if hour == 12:
                     hour = 0
                     logger.debug("Adjusted hour for 上午: 0 (midnight)")
+        else:
+            # Try English time patterns
+            m_eng = re.search(r'(\d{1,2})(?::(\d{2}))?\s*(am|pm)', s.lower())
+            if m_eng:
+                hour = int(m_eng.group(1))
+                minute = int(m_eng.group(2)) if m_eng.group(2) else 0
+                am_pm = m_eng.group(3)
 
+                if am_pm == 'pm' and hour < 12:
+                    hour += 12
+                elif am_pm == 'am' and hour == 12:
+                    hour = 0
+
+                logger.debug(f"Extracted English time: {hour}:{minute:02d}")
+
+        # If we extracted time, construct the datetime
+        if hour is not None:
             # Construct datetime
             result = base.replace(hour=hour, minute=minute, second=0, microsecond=0)
 
@@ -105,6 +184,11 @@ def parse_nl_time(nl_time_str: str, prefer_future: bool = True, timezone: Option
                 logger.debug("Adjusted to future date (prefer_future=True)")
 
             logger.info(f"Successfully parsed '{nl_time_str}' to {result}")
+            return result
+        else:
+            # No time specified, use default time (9 AM for future dates)
+            result = base.replace(hour=9, minute=0, second=0, microsecond=0)
+            logger.info(f"Successfully parsed '{nl_time_str}' to {result} (default 9 AM)")
             return result
 
     # ----- Try standard datetime format (ISO 8601 or similar) -----
@@ -121,6 +205,80 @@ def parse_nl_time(nl_time_str: str, prefer_future: bool = True, timezone: Option
         except Exception as e:
             logger.warning(f"Failed to create datetime from ISO format: {e}")
 
+    # ----- Try MM/DD date format (e.g., "11/21", "11/21 2pm") -----
+    # Match patterns like "11/21" or "11/21 下午2點" or "11/21 2pm"
+    date_only_pattern = r'(\d{1,2})/(\d{1,2})(?:\s+(.+))?$'
+    m = re.match(date_only_pattern, s)
+    if m:
+        month, day = int(m.group(1)), int(m.group(2))
+        time_part = m.group(3) if m.group(3) else None
+
+        # Determine the year (assume current year, or next year if date has passed)
+        year = now.year
+        try:
+            # Try to create the date
+            candidate_date = tz.localize(datetime(year, month, day, 0, 0, 0))
+
+            # If the date is in the past, try next year
+            if prefer_future and candidate_date.date() < now.date():
+                year += 1
+                candidate_date = tz.localize(datetime(year, month, day, 0, 0, 0))
+
+            # If there's a time part, try to extract the hour and minute
+            if time_part:
+                logger.debug(f"Date parsed: {candidate_date.date()}, now parsing time: {time_part}")
+
+                # Try Chinese time patterns first
+                hour_extracted = None
+                minute_extracted = 0
+
+                # Extract hour from patterns like "下午2點", "晚上8點", "上午10點", "2pm", "3:30pm"
+                m_hour = re.search(r'(\d{1,2})\s*[點点时時]', time_part)
+                if m_hour:
+                    hour_extracted = int(m_hour.group(1))
+                    # Extract minutes if present
+                    m_min = re.search(r'[點点时時]\s*(\d{1,2})\s*[分]', time_part)
+                    if m_min:
+                        minute_extracted = int(m_min.group(1))
+
+                    # Time period adjustment (Chinese)
+                    if '下午' in time_part or '晚上' in time_part:
+                        if 1 <= hour_extracted <= 11:
+                            hour_extracted += 12
+                    elif '上午' in time_part or '早上' in time_part:
+                        if hour_extracted == 12:
+                            hour_extracted = 0
+                else:
+                    # Try English time patterns like "2pm", "3:30pm", "14:00"
+                    m_eng = re.search(r'(\d{1,2})(?::(\d{2}))?\s*(am|pm)?', time_part.lower())
+                    if m_eng:
+                        hour_extracted = int(m_eng.group(1))
+                        minute_extracted = int(m_eng.group(2)) if m_eng.group(2) else 0
+                        am_pm = m_eng.group(3)
+
+                        if am_pm == 'pm' and hour_extracted < 12:
+                            hour_extracted += 12
+                        elif am_pm == 'am' and hour_extracted == 12:
+                            hour_extracted = 0
+
+                if hour_extracted is not None:
+                    result = candidate_date.replace(
+                        hour=hour_extracted,
+                        minute=minute_extracted,
+                        second=0,
+                        microsecond=0
+                    )
+                    logger.info(f"Parsed MM/DD with time '{nl_time_str}' to {result}")
+                    return result
+
+            # No time specified, default to 9 AM
+            result = candidate_date.replace(hour=9, minute=0, second=0, microsecond=0)
+            logger.info(f"Parsed MM/DD date '{nl_time_str}' to {result}")
+            return result
+
+        except Exception as e:
+            logger.warning(f"Failed to parse MM/DD format: {e}")
+
     # ----- Fallback to dateparser library -----
     # dateparser handles many English formats and some international formats
     logger.debug("Trying dateparser library as fallback")
@@ -129,11 +287,14 @@ def parse_nl_time(nl_time_str: str, prefer_future: bool = True, timezone: Option
         'PREFER_DATES_FROM': 'future' if prefer_future else 'current_period',
         'TIMEZONE': timezone,
         'RETURN_AS_TIMEZONE_AWARE': True,
-        'RELATIVE_BASE': now
+        'RELATIVE_BASE': now,
+        'PREFER_DAY_OF_MONTH': 'first',  # For "next monday" style patterns
+        'PREFER_DATES_FROM': 'future',
     }
 
     try:
-        parsed = dateparser.parse(s, settings=settings)
+        # Try with languages including English and Chinese
+        parsed = dateparser.parse(s, settings=settings, languages=['en', 'zh'])
         if parsed:
             # Ensure timezone-aware
             if parsed.tzinfo is None:

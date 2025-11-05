@@ -228,86 +228,184 @@ class GeminiProvider(BaseLLMProvider):
         return "gemini"
 
     def call_llm(self, messages: List[Dict], tools: List[Dict], max_tokens: int) -> Dict:
-        """Call Gemini API"""
+        """Call Gemini API with structured output"""
         self._ensure_initialized()  # Lazy load on first API call
+        import google.generativeai as genai
 
-        # Convert messages to Gemini format
+        # Build the full prompt with system message and user input
         system_message = None
-        gemini_messages = []
+        user_message = None
 
         for msg in messages:
             if msg['role'] == 'system':
                 system_message = msg['content']
             elif msg['role'] == 'user':
-                gemini_messages.append({'role': 'user', 'parts': [msg['content']]})
-            elif msg['role'] == 'assistant':
-                gemini_messages.append({'role': 'model', 'parts': [msg['content']]})
+                user_message = msg['content']
 
-        # Convert tools to Gemini function declarations
-        import google.generativeai as genai
-        gemini_tools = []
+        # Combine system message with user input and tool instructions
+        full_prompt = ""
+        if system_message:
+            full_prompt += f"{system_message}\n\n"
+
         if tools:
-            for tool in tools:
-                func = tool['function']
-                gemini_tools.append(
-                    genai.protos.FunctionDeclaration(
-                        name=func['name'],
-                        description=func['description'],
-                        parameters=genai.protos.Schema(
-                            type=genai.protos.Type.OBJECT,
-                            properties={
-                                k: self._convert_property_schema(v)
-                                for k, v in func['parameters']['properties'].items()
-                            },
-                            required=func['parameters'].get('required', [])
-                        )
-                    )
-                )
+            # Add structured output instructions
+            full_prompt += """Analyze the user's request and respond with structured JSON.
 
-        # Prepare the prompt with system message
-        if system_message and gemini_messages:
-            gemini_messages[0]['parts'][0] = f"{system_message}\n\nUser: {gemini_messages[0]['parts'][0]}"
+If the user wants to schedule an event, respond with:
+{
+  "action": "schedule_event",
+  "event": {
+    "summary": "event title",
+    "start_time_str": "start time in natural language or standard format",
+    "end_time_str": "end time in natural language or standard format",
+    "description": "optional description",
+    "location": "optional location",
+    "participants": ["optional", "email", "addresses"]
+  },
+  "response": "Your friendly confirmation message to the user"
+}
 
-        # Call Gemini API
-        if gemini_tools:
-            response = self.client.generate_content(
-                gemini_messages[-1]['parts'][0] if gemini_messages else '',
-                tools=[genai.protos.Tool(function_declarations=gemini_tools)],
-                generation_config={'max_output_tokens': max_tokens}
-            )
-        else:
-            response = self.client.generate_content(
-                gemini_messages[-1]['parts'][0] if gemini_messages else '',
-                generation_config={'max_output_tokens': max_tokens}
-            )
+If the user is asking a question or chatting (not scheduling), respond with:
+{
+  "action": "chat",
+  "response": "Your helpful response to the user"
+}
 
-        # Convert response to standard format
-        result = {
-            'content': None,
-            'tool_calls': []
+"""
+
+        full_prompt += f"User request: {user_message}"
+
+        # Define response schema for structured output
+        response_schema = {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "description": "The action to take: 'schedule_event' or 'chat'",
+                    "enum": ["schedule_event", "chat"]
+                },
+                "event": {
+                    "type": "object",
+                    "properties": {
+                        "summary": {
+                            "type": "string",
+                            "description": "Event title or summary"
+                        },
+                        "start_time_str": {
+                            "type": "string",
+                            "description": "Event start time"
+                        },
+                        "end_time_str": {
+                            "type": "string",
+                            "description": "Event end time"
+                        },
+                        "description": {
+                            "type": "string",
+                            "description": "Optional event description"
+                        },
+                        "location": {
+                            "type": "string",
+                            "description": "Optional event location"
+                        },
+                        "participants": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Optional participant emails"
+                        }
+                    },
+                    "required": ["summary", "start_time_str", "end_time_str"]
+                },
+                "response": {
+                    "type": "string",
+                    "description": "Your response message to the user"
+                }
+            },
+            "required": ["action", "response"]
         }
 
-        if response.text:
-            result['content'] = response.text
+        # Convert schema to Gemini format
+        gemini_schema = self._build_gemini_schema(response_schema)
 
-        # Check for function calls
-        if hasattr(response, 'candidates') and response.candidates:
-            for part in response.candidates[0].content.parts:
-                if hasattr(part, 'function_call') and part.function_call:
-                    fc = part.function_call
-                    result['tool_calls'].append({
-                        'id': 'gemini_call',
-                        'type': 'function',
-                        'function': {
-                            'name': fc.name,
-                            'arguments': json.dumps(dict(fc.args))
-                        }
-                    })
+        # Call Gemini API with structured output
+        generation_config = genai.GenerationConfig(
+            response_mime_type="application/json",
+            response_schema=gemini_schema,
+            max_output_tokens=max_tokens
+        )
+
+        response = self.client.generate_content(
+            full_prompt,
+            generation_config=generation_config
+        )
+
+        # Parse the structured JSON response
+        try:
+            structured_data = json.loads(response.text)
+
+            result = {
+                'content': structured_data.get('response', ''),
+                'tool_calls': []
+            }
+
+            # Convert to tool call format if action is schedule_event
+            if structured_data.get('action') == 'schedule_event' and 'event' in structured_data:
+                result['tool_calls'].append({
+                    'id': 'gemini_structured_call',
+                    'type': 'function',
+                    'function': {
+                        'name': 'schedule_calendar_event',
+                        'arguments': json.dumps(structured_data['event'])
+                    }
+                })
+
+            return result
+
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse Gemini structured output: {e}")
+            return {
+                'content': response.text,
+                'tool_calls': []
+            }
+
+    def _build_gemini_schema(self, schema_dict: Dict) -> Dict:
+        """Build Gemini schema from a dict-based schema definition
+
+        Args:
+            schema_dict: Schema definition as a dictionary
+
+        Returns:
+            Schema dict compatible with Gemini's response_schema parameter
+        """
+        result = {}
+
+        # Copy basic properties
+        if 'type' in schema_dict:
+            result['type'] = schema_dict['type'].upper()
+
+        if 'description' in schema_dict:
+            result['description'] = schema_dict['description']
+
+        if 'enum' in schema_dict:
+            result['enum'] = schema_dict['enum']
+
+        # Handle object properties
+        if 'properties' in schema_dict:
+            result['properties'] = {}
+            for key, prop in schema_dict['properties'].items():
+                result['properties'][key] = self._build_gemini_schema(prop)
+
+        # Handle required fields
+        if 'required' in schema_dict:
+            result['required'] = schema_dict['required']
+
+        # Handle array items
+        if 'items' in schema_dict:
+            result['items'] = self._build_gemini_schema(schema_dict['items'])
 
         return result
 
     def _convert_property_schema(self, prop: Dict) -> 'genai.protos.Schema':
-        """Convert OpenAI property schema to Gemini Schema"""
+        """Convert OpenAI property schema to Gemini Schema (deprecated, kept for compatibility)"""
         import google.generativeai as genai
 
         prop_type = prop.get('type', 'string')
@@ -326,7 +424,7 @@ class GeminiProvider(BaseLLMProvider):
         return genai.protos.Schema(**schema_kwargs)
 
     def _convert_type(self, openai_type: str) -> int:
-        """Convert OpenAI type to Gemini type enum"""
+        """Convert OpenAI type to Gemini type enum (deprecated, kept for compatibility)"""
         import google.generativeai as genai
         type_map = {
             'string': genai.protos.Type.STRING,
