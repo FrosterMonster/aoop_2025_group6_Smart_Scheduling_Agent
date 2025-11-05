@@ -256,10 +256,7 @@ class GeminiProvider(BaseLLMProvider):
                         parameters=genai.protos.Schema(
                             type=genai.protos.Type.OBJECT,
                             properties={
-                                k: genai.protos.Schema(
-                                    type=self._convert_type(v.get('type', 'string')),
-                                    description=v.get('description', '')
-                                )
+                                k: self._convert_property_schema(v)
                                 for k, v in func['parameters']['properties'].items()
                             },
                             required=func['parameters'].get('required', [])
@@ -308,6 +305,25 @@ class GeminiProvider(BaseLLMProvider):
                     })
 
         return result
+
+    def _convert_property_schema(self, prop: Dict) -> 'genai.protos.Schema':
+        """Convert OpenAI property schema to Gemini Schema"""
+        import google.generativeai as genai
+
+        prop_type = prop.get('type', 'string')
+        schema_kwargs = {
+            'type': self._convert_type(prop_type),
+            'description': prop.get('description', '')
+        }
+
+        # Handle array type - must include items
+        if prop_type == 'array' and 'items' in prop:
+            items_type = prop['items'].get('type', 'string')
+            schema_kwargs['items'] = genai.protos.Schema(
+                type=self._convert_type(items_type)
+            )
+
+        return genai.protos.Schema(**schema_kwargs)
 
     def _convert_type(self, openai_type: str) -> int:
         """Convert OpenAI type to Gemini type enum"""
