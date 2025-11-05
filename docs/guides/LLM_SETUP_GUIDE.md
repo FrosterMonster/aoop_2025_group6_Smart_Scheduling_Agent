@@ -13,7 +13,7 @@ Your AI Schedule Agent now supports **multiple LLM providers**: Claude (Anthropi
 | **Claude 3.5 Sonnet** ⭐ | Best overall, excellent Chinese support | Moderate | Easy |
 | **OpenAI GPT-3.5** | Fastest, cheapest | Low | Easy |
 | **OpenAI GPT-4** | Most accurate | High | Easy |
-| **Google Gemini** | Future option | TBD | Medium |
+| **Google Gemini Pro** | Free tier available, good alternative | Free/Low | Easy |
 
 **Recommendation**: Start with **Claude 3.5 Sonnet** (default) or **GPT-3.5-turbo** for cost-effectiveness.
 
@@ -39,6 +39,15 @@ Your AI Schedule Agent now supports **multiple LLM providers**: Claude (Anthropi
 
 **Pricing**: $0.50/$1.50 per million tokens (GPT-3.5), $30/$60 per million (GPT-4)
 
+#### **For Google Gemini**
+
+1. Go to: https://makersuite.google.com/app/apikey
+2. Sign up/login with your Google account
+3. Click "Create API key"
+4. Copy your key
+
+**Pricing**: Free tier available (60 requests/minute), then $0.125/$0.375 per million tokens
+
 ---
 
 ### Step 3: Configure Your API Key
@@ -61,6 +70,11 @@ Your AI Schedule Agent now supports **multiple LLM providers**: Claude (Anthropi
    LLM_PROVIDER=openai
    OPENAI_API_KEY=sk-your-actual-key-here
    OPENAI_MODEL=gpt-3.5-turbo
+
+   # OR for Google Gemini
+   LLM_PROVIDER=gemini
+   GEMINI_API_KEY=your-gemini-api-key-here
+   GEMINI_MODEL=gemini-pro
    ```
 
 3. **Save and close**
@@ -79,6 +93,10 @@ Edit `.config/settings.json`:
     },
     "openai": {
       "model": "gpt-3.5-turbo",
+      "api_key": null
+    },
+    "gemini": {
+      "model": "gemini-pro",
       "api_key": null
     }
   }
@@ -101,6 +119,10 @@ ANTHROPIC_API_KEY=sk-ant-your-key
 # Switch to OpenAI
 LLM_PROVIDER=openai
 OPENAI_API_KEY=sk-your-key
+
+# Switch to Gemini
+LLM_PROVIDER=gemini
+GEMINI_API_KEY=your-gemini-key
 ```
 
 **Restart the application** after changing providers.
@@ -260,6 +282,9 @@ LOG_LEVEL=INFO                   # DEBUG, INFO, WARNING, ERROR
 
    # For OpenAI
    pip install openai
+
+   # For Gemini
+   pip install google-generativeai
 
    # Or install all
    pip install -r requirements.txt

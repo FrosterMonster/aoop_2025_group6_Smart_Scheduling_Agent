@@ -33,6 +33,10 @@ echo "LLM_PROVIDER=claude" >> .env
 # Option B: OpenAI
 echo "OPENAI_API_KEY=sk-your-key-here" >> .env
 echo "LLM_PROVIDER=openai" >> .env
+
+# Option C: Google Gemini (Free tier available)
+echo "GEMINI_API_KEY=your-gemini-key-here" >> .env
+echo "LLM_PROVIDER=gemini" >> .env
 ```
 
 **Google Calendar**:

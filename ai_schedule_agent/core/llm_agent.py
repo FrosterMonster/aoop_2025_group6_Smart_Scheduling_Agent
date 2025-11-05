@@ -189,6 +189,140 @@ class OpenAIProvider(BaseLLMProvider):
         }
 
 
+class GeminiProvider(BaseLLMProvider):
+    """Google Gemini provider with lazy initialization"""
+
+    def __init__(self, config: ConfigManager):
+        self.config = config
+        self.api_key = config.get_api_key('gemini')
+        self.model = config.get_gemini_model()
+        self.client = None
+        self._initialized = False
+
+    def _ensure_initialized(self):
+        """Lazy initialization - only load google-generativeai when actually needed"""
+        if self._initialized:
+            return
+
+        self._initialized = True
+        if self.api_key:
+            try:
+                logger.info(f"Initializing Gemini provider: {self.model}")
+                import google.generativeai as genai
+                genai.configure(api_key=self.api_key)
+                self.client = genai.GenerativeModel(self.model)
+                logger.info(f"Gemini provider initialized successfully")
+            except ImportError:
+                logger.error("google-generativeai package not installed. Run: pip install google-generativeai")
+                self.client = None
+            except Exception as e:
+                logger.error(f"Failed to initialize Gemini client: {e}")
+                self.client = None
+
+    def is_available(self) -> bool:
+        if not self._initialized and self.api_key:
+            self._ensure_initialized()
+        return self.client is not None
+
+    def get_provider_name(self) -> str:
+        return "gemini"
+
+    def call_llm(self, messages: List[Dict], tools: List[Dict], max_tokens: int) -> Dict:
+        """Call Gemini API"""
+        self._ensure_initialized()  # Lazy load on first API call
+
+        # Convert messages to Gemini format
+        system_message = None
+        gemini_messages = []
+
+        for msg in messages:
+            if msg['role'] == 'system':
+                system_message = msg['content']
+            elif msg['role'] == 'user':
+                gemini_messages.append({'role': 'user', 'parts': [msg['content']]})
+            elif msg['role'] == 'assistant':
+                gemini_messages.append({'role': 'model', 'parts': [msg['content']]})
+
+        # Convert tools to Gemini function declarations
+        import google.generativeai as genai
+        gemini_tools = []
+        if tools:
+            for tool in tools:
+                func = tool['function']
+                gemini_tools.append(
+                    genai.protos.FunctionDeclaration(
+                        name=func['name'],
+                        description=func['description'],
+                        parameters=genai.protos.Schema(
+                            type=genai.protos.Type.OBJECT,
+                            properties={
+                                k: genai.protos.Schema(
+                                    type=self._convert_type(v.get('type', 'string')),
+                                    description=v.get('description', '')
+                                )
+                                for k, v in func['parameters']['properties'].items()
+                            },
+                            required=func['parameters'].get('required', [])
+                        )
+                    )
+                )
+
+        # Prepare the prompt with system message
+        if system_message and gemini_messages:
+            gemini_messages[0]['parts'][0] = f"{system_message}\n\nUser: {gemini_messages[0]['parts'][0]}"
+
+        # Call Gemini API
+        if gemini_tools:
+            response = self.client.generate_content(
+                gemini_messages[-1]['parts'][0] if gemini_messages else '',
+                tools=[genai.protos.Tool(function_declarations=gemini_tools)],
+                generation_config={'max_output_tokens': max_tokens}
+            )
+        else:
+            response = self.client.generate_content(
+                gemini_messages[-1]['parts'][0] if gemini_messages else '',
+                generation_config={'max_output_tokens': max_tokens}
+            )
+
+        # Convert response to standard format
+        result = {
+            'content': None,
+            'tool_calls': []
+        }
+
+        if response.text:
+            result['content'] = response.text
+
+        # Check for function calls
+        if hasattr(response, 'candidates') and response.candidates:
+            for part in response.candidates[0].content.parts:
+                if hasattr(part, 'function_call') and part.function_call:
+                    fc = part.function_call
+                    result['tool_calls'].append({
+                        'id': 'gemini_call',
+                        'type': 'function',
+                        'function': {
+                            'name': fc.name,
+                            'arguments': json.dumps(dict(fc.args))
+                        }
+                    })
+
+        return result
+
+    def _convert_type(self, openai_type: str) -> int:
+        """Convert OpenAI type to Gemini type enum"""
+        import google.generativeai as genai
+        type_map = {
+            'string': genai.protos.Type.STRING,
+            'integer': genai.protos.Type.INTEGER,
+            'number': genai.protos.Type.NUMBER,
+            'boolean': genai.protos.Type.BOOLEAN,
+            'array': genai.protos.Type.ARRAY,
+            'object': genai.protos.Type.OBJECT,
+        }
+        return type_map.get(openai_type, genai.protos.Type.STRING)
+
+
 class LLMAgent:
     """Multi-provider LLM agent for processing natural language scheduling requests"""
 
@@ -216,7 +350,8 @@ class LLMAgent:
             'claude': ClaudeProvider,
             'anthropic': ClaudeProvider,
             'openai': OpenAIProvider,
-            # 'gemini': GeminiProvider,  # TODO: Implement if needed
+            'gemini': GeminiProvider,  # Gemini support added
+            'google': GeminiProvider,  # Alias for gemini
         }
 
         provider_class = provider_map.get(self.provider_name.lower())
