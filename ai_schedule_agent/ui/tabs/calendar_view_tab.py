@@ -411,9 +411,14 @@ class CalendarViewTab:
 
         # Create event frame
         if compact:
-            event_frame = tk.Frame(parent, bg=event_color, relief='flat',
+            # Container with fixed border space to prevent shaking
+            event_container = tk.Frame(parent, bg=parent['bg'], highlightthickness=1,
+                                      highlightbackground=parent['bg'])
+            event_container.pack(fill='x', pady=1, padx=1)
+
+            event_frame = tk.Frame(event_container, bg=event_color, relief='flat',
                                  cursor="hand2")
-            event_frame.pack(fill='x', pady=1, padx=1)
+            event_frame.pack(fill='both', expand=True)
 
             time_text = start.strftime('%H:%M')
             title_text = event.get('summary', 'Untitled')
@@ -426,19 +431,22 @@ class CalendarViewTab:
                                  anchor='w', padx=4, pady=2)
             event_label.pack(fill='x')
 
-            # Add hover effect
+            # Add hover effect - only change border color, space already allocated
             def on_enter(e):
-                event_frame.config(relief='raised', borderwidth=1)
+                event_container.config(highlightbackground='white')
                 # Show tooltip
                 self.show_event_tooltip(event_label, event, start, end)
 
             def on_leave(e):
-                event_frame.config(relief='flat')
+                event_container.config(highlightbackground=parent['bg'])
                 self.hide_tooltip()
 
             def on_click(e):
                 self.show_event_details(event, start, end)
 
+            event_container.bind("<Enter>", on_enter)
+            event_container.bind("<Leave>", on_leave)
+            event_container.bind("<Button-1>", on_click)
             event_frame.bind("<Enter>", on_enter)
             event_frame.bind("<Leave>", on_leave)
             event_frame.bind("<Button-1>", on_click)
@@ -447,9 +455,14 @@ class CalendarViewTab:
             event_label.bind("<Button-1>", on_click)
 
         else:
-            event_frame = tk.Frame(parent, bg=event_color, relief='flat',
+            # Container with fixed border space to prevent shaking
+            event_container = tk.Frame(parent, bg=parent['bg'], highlightthickness=2,
+                                      highlightbackground=parent['bg'])
+            event_container.pack(fill='x', pady=3, padx=2)
+
+            event_frame = tk.Frame(event_container, bg=event_color, relief='flat',
                                  cursor="hand2")
-            event_frame.pack(fill='x', pady=3, padx=2)
+            event_frame.pack(fill='both', expand=True)
 
             time_label = tk.Label(event_frame, text=f"🕐 {start.strftime('%H:%M')} - {end.strftime('%H:%M')}",
                                 font=('Segoe UI', 9, 'bold'), bg=event_color, fg='white',
@@ -467,17 +480,17 @@ class CalendarViewTab:
                                    anchor='w', padx=6, pady=2)
                 loc_label.pack(fill='x')
 
-            # Add hover and click effects
+            # Add hover and click effects - only change border color, space already allocated
             def on_enter(e):
-                event_frame.config(relief='raised', borderwidth=2)
+                event_container.config(highlightbackground='white')
 
             def on_leave(e):
-                event_frame.config(relief='flat')
+                event_container.config(highlightbackground=parent['bg'])
 
             def on_click(e):
                 self.show_event_details(event, start, end)
 
-            for widget in [event_frame, time_label, title_label]:
+            for widget in [event_container, event_frame, time_label, title_label]:
                 widget.bind("<Enter>", on_enter)
                 widget.bind("<Leave>", on_leave)
                 widget.bind("<Button-1>", on_click)

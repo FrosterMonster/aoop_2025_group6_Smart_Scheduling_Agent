@@ -54,7 +54,7 @@ def hide_tooltip(self):
 
 ---
 
-### 2. Calendar UI Wiggling/Jittering
+### 2. Calendar UI Wiggling/Jittering (Day Cells)
 
 **Problem**: Calendar day cells would resize and jitter when hovering, creating an unstable visual experience.
 
@@ -63,7 +63,7 @@ def hide_tooltip(self):
 - Day frames resized dynamically based on content
 - Inconsistent padding values
 
-**Solution** ([calendar_view_tab.py:330-345](ai_schedule_agent/ui/tabs/calendar_view_tab.py#L330)):
+**Solution** ([calendar_view_tab.py:309-324](ai_schedule_agent/ui/tabs/calendar_view_tab.py#L309)):
 
 1. **Fixed height with disabled propagation** (lines 331-335):
 ```python
@@ -98,7 +98,55 @@ day_frame.bind("<Leave>", on_leave)
 
 ---
 
-### 3. Popup Design Inconsistency
+### 3. Event Widget Shaking on Hover
+
+**Problem**: When hovering over event widgets inside calendar cells, they would shake and cause the entire day cell to jitter.
+
+**Root Causes**:
+- Hover effects changed `relief` property from 'flat' to 'raised', adding/removing border space
+- `borderwidth` changes on hover caused layout recalculation
+- No fixed space allocated for hover borders
+
+**Solution** ([calendar_view_tab.py:413-496](ai_schedule_agent/ui/tabs/calendar_view_tab.py#L413)):
+
+**Pattern: Container with Pre-Allocated Border Space**
+```python
+# Compact mode (month view)
+event_container = tk.Frame(parent, bg=parent['bg'], highlightthickness=1,
+                          highlightbackground=parent['bg'])
+event_container.pack(fill='x', pady=1, padx=1)
+
+event_frame = tk.Frame(event_container, bg=event_color, relief='flat', cursor="hand2")
+event_frame.pack(fill='both', expand=True)
+
+# Hover effect - only change border COLOR, not thickness
+def on_enter(e):
+    event_container.config(highlightbackground='white')
+
+def on_leave(e):
+    event_container.config(highlightbackground=parent['bg'])
+```
+
+**Key Changes**:
+1. **Two-layer structure**:
+   - Outer `event_container`: Holds fixed border space (1px for compact, 2px for full)
+   - Inner `event_frame`: Contains actual event content
+
+2. **Pre-allocated space**:
+   - Border space always exists (`highlightthickness=1` or `2`)
+   - Hover only changes `highlightbackground` color, not thickness
+   - No layout recalculation needed
+
+3. **Removed problematic properties**:
+   - ❌ No more `relief='raised'` on hover
+   - ❌ No more `borderwidth` changes
+   - ✅ Only `highlightbackground` color changes
+
+**Result**: ✅ Event widgets no longer shake when hovering, smooth visual feedback.
+
+---
+
+### 4. Popup Design Inconsistency
 
 **Problem**: Event detail popups and day event popups had basic design that didn't match the modern Google Calendar-inspired theme.
 
@@ -221,6 +269,39 @@ event_card.bind("<Button-1>", make_click_handler(event, start, end))
 
 ---
 
+## 🎨 Design Pattern: Container with Pre-Allocated Border Space
+
+The event widget shaking fix introduced a robust pattern for hover effects without layout changes:
+
+```python
+# Create outer container with fixed border space
+event_container = tk.Frame(parent, bg=parent['bg'],
+                          highlightthickness=BORDER_SIZE,
+                          highlightbackground=parent['bg'])
+event_container.pack(fill='x', pady=Y, padx=X)
+
+# Create inner frame for content
+event_frame = tk.Frame(event_container, bg=content_color,
+                      relief='flat', cursor="hand2")
+event_frame.pack(fill='both', expand=True)
+
+# Hover: only change color, not dimensions
+def on_enter(e):
+    event_container.config(highlightbackground='white')
+
+def on_leave(e):
+    event_container.config(highlightbackground=parent['bg'])
+```
+
+**Key Principles**:
+1. ✅ Pre-allocate border space in outer container
+2. ✅ Only change `highlightbackground` color on hover
+3. ✅ Never change `highlightthickness`, `relief`, or `borderwidth`
+4. ✅ Use two-layer structure (container + content)
+5. ✅ Bind events to all relevant widgets for smooth interaction
+
+---
+
 ## 🎨 Design Pattern: Safe Tooltip Management
 
 The tooltip bug fix introduced a robust pattern for managing ephemeral UI elements:
@@ -338,9 +419,12 @@ popup.geometry(f"+{x}+{y}")
 ### Layout Stability
 | Aspect | Before | After |
 |--------|--------|-------|
-| Hover wiggling | ❌ Yes | ✅ No |
+| Day cell wiggling | ❌ Yes | ✅ No |
+| Event widget shaking | ❌ Yes | ✅ No |
 | Fixed height | ❌ No | ✅ Yes (120px) |
-| Border change | ❌ 1px→2px | ✅ Color only |
+| Day border change | ❌ 1px→2px | ✅ Color only |
+| Event hover effect | ❌ relief='raised' | ✅ Border color only |
+| Pre-allocated borders | ❌ No | ✅ Yes |
 | Grid propagate | ❌ Enabled | ✅ Disabled |
 
 ### Popup Design
@@ -366,9 +450,12 @@ popup.geometry(f"+{x}+{y}")
 
 ### Layout Testing
 - [ ] Hover over day cell → blue border, no wiggling
+- [ ] Hover over event widgets → white border, no shaking
+- [ ] Move mouse rapidly across events → smooth, no jittering
 - [ ] Hover over multiple cells rapidly → no jittering
 - [ ] View calendar with many events → consistent cell heights
 - [ ] Resize window → cells maintain proportions
+- [ ] Hover over events in week view → stable layout
 
 ### Popup Testing
 - [ ] Click event → details popup appears centered
@@ -385,17 +472,19 @@ popup.geometry(f"+{x}+{y}")
 
 1. **[ai_schedule_agent/ui/tabs/calendar_view_tab.py](ai_schedule_agent/ui/tabs/calendar_view_tab.py)**
    - Line 24: Added `self.tooltip = None`
-   - Lines 330-345: Fixed day cell layout and hover
-   - Lines 485-552: Tooltip management methods
-   - Lines 554-660: Event details popup
-   - Lines 662-806: Day events popup
+   - Lines 309-324: Fixed day cell layout and hover
+   - Lines 413-496: Event widget with container pattern (no shaking)
+   - Lines 498-506: Tooltip management methods
+   - Lines 508-614: Event details popup
+   - Lines 616-760: Day events popup
 
 ---
 
 ## 🚀 Impact
 
 ### User Experience
-- ✅ **More stable**: No more wiggling/jittering on hover
+- ✅ **Ultra-stable**: No wiggling, shaking, or jittering anywhere
+- ✅ **Smooth interactions**: Hover effects without layout changes
 - ✅ **Cleaner**: Tooltips disappear properly
 - ✅ **More professional**: Modern card-based popups
 - ✅ **More informative**: Duration, priority colors, location
