@@ -23,4 +23,10 @@ class UserProfile:
     @classmethod
     def from_dict(cls, data):
         """Create from dictionary"""
+        # Convert energy_patterns keys from strings to integers
+        # (JSON serialization converts int keys to strings)
+        if 'energy_patterns' in data:
+            data['energy_patterns'] = {
+                int(k): v for k, v in data['energy_patterns'].items()
+            }
         return cls(**data)

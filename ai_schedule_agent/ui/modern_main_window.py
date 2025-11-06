@@ -14,6 +14,7 @@ from ai_schedule_agent.models.event import Event
 from ai_schedule_agent.models.enums import Priority
 from ai_schedule_agent.core.scheduling_engine import SchedulingEngine
 from ai_schedule_agent.core.nlp_processor import NLPProcessor
+from ai_schedule_agent.core.state_manager import StateManager
 from ai_schedule_agent.integrations.google_calendar import CalendarIntegration
 from ai_schedule_agent.integrations.notifications import NotificationManager
 from ai_schedule_agent.utils.logging import logger
@@ -37,6 +38,9 @@ class ModernSchedulerUI:
         # Apply modern styling
         self.setup_styles()
 
+        # Initialize state manager
+        self.state_manager = StateManager()
+
         # Initialize backend components
         self.user_profile = self.load_or_create_profile()
         self.calendar = CalendarIntegration()
@@ -44,10 +48,16 @@ class ModernSchedulerUI:
         self.nlp_processor = NLPProcessor(calendar=self.calendar)
         self.notification_manager = NotificationManager(self.user_profile.email)
 
-        # UI state
-        self.selected_filters = set()
-        self.current_view = 'day'  # day, week, month
-        self.current_date = datetime.datetime.now()
+        # Load previous app state
+        self.load_app_state()
+
+        # UI state (loaded from state or defaults)
+        if not hasattr(self, 'selected_filters'):
+            self.selected_filters = set()
+        if not hasattr(self, 'current_view'):
+            self.current_view = 'day'  # day, week, month
+        if not hasattr(self, 'current_date'):
+            self.current_date = datetime.datetime.now()
 
         # Build the modern UI
         self.setup_modern_ui()
@@ -64,32 +74,111 @@ class ModernSchedulerUI:
 
     def load_or_create_profile(self) -> UserProfile:
         """Load or create user profile"""
+        # Get profile file path, ensure it's absolute
         profile_file = self.config.get_path('user_profile', '.config/user_profile.json')
 
+        # Make absolute path if relative
+        if not os.path.isabs(profile_file):
+            profile_file = os.path.abspath(profile_file)
+
+        logger.info(f"Loading user profile from: {profile_file}")
+
         if os.path.exists(profile_file):
-            with open(profile_file, 'r') as f:
-                data = json.load(f)
-                return UserProfile.from_dict(data)
+            try:
+                with open(profile_file, 'r') as f:
+                    data = json.load(f)
+                    logger.info(f"✓ User profile loaded successfully")
+                    logger.info(f"  Working hours: {data.get('working_hours', {})}")
+                    logger.info(f"  Energy patterns (raw): {data.get('energy_patterns', {})}")
+                    logger.info(f"  Email: {data.get('email', 'Not set')}")
+                    profile = UserProfile.from_dict(data)
+                    logger.info(f"  Energy patterns (converted): {profile.energy_patterns}")
+                    return profile
+            except Exception as e:
+                logger.error(f"✗ Failed to load profile, creating new one: {e}")
         else:
-            profile = UserProfile()
-            profile.working_hours = {
-                'Monday': ('09:00', '17:00'),
-                'Tuesday': ('09:00', '17:00'),
-                'Wednesday': ('09:00', '17:00'),
-                'Thursday': ('09:00', '17:00'),
-                'Friday': ('09:00', '17:00')
-            }
-            profile.energy_patterns = {
-                9: 0.7, 10: 0.9, 11: 1.0, 12: 0.8,
-                13: 0.6, 14: 0.7, 15: 0.8, 16: 0.7
-            }
-            return profile
+            logger.info("No existing profile found, creating default profile")
+
+        # Create default profile
+        profile = UserProfile()
+        profile.working_hours = {
+            'Monday': ('09:00', '17:00'),
+            'Tuesday': ('09:00', '17:00'),
+            'Wednesday': ('09:00', '17:00'),
+            'Thursday': ('09:00', '17:00'),
+            'Friday': ('09:00', '17:00')
+        }
+        profile.energy_patterns = {
+            9: 0.7, 10: 0.9, 11: 1.0, 12: 0.8,
+            13: 0.6, 14: 0.7, 15: 0.8, 16: 0.7
+        }
+
+        # Save the default profile immediately
+        self.user_profile = profile
+        self.save_profile()
+
+        return profile
 
     def save_profile(self):
         """Save user profile"""
+        # Get profile file path, ensure it's absolute
         profile_file = self.config.get_path('user_profile', '.config/user_profile.json')
-        with open(profile_file, 'w') as f:
-            json.dump(self.user_profile.to_dict(), f, indent=2, default=str)
+
+        # Make absolute path if relative
+        if not os.path.isabs(profile_file):
+            profile_file = os.path.abspath(profile_file)
+
+        # Ensure directory exists
+        os.makedirs(os.path.dirname(profile_file), exist_ok=True)
+
+        # Save profile
+        try:
+            with open(profile_file, 'w') as f:
+                json.dump(self.user_profile.to_dict(), f, indent=2, default=str)
+            logger.info(f"✓ User profile saved to {profile_file}")
+        except Exception as e:
+            logger.error(f"✗ Failed to save user profile: {e}")
+            raise
+
+    def load_app_state(self):
+        """Load application state from previous session"""
+        try:
+            state = self.state_manager.load_app_state()
+
+            # Restore view settings
+            if 'current_view' in state:
+                self.current_view = state['current_view']
+
+            if 'selected_filters' in state:
+                self.selected_filters = set(state['selected_filters'])
+
+            # Restore window geometry
+            if 'window_geometry' in state:
+                try:
+                    self.root.geometry(state['window_geometry'])
+                except:
+                    pass  # Ignore if invalid
+
+            logger.info(f"✓ App state loaded: view={self.current_view}, filters={len(self.selected_filters)}")
+
+        except Exception as e:
+            logger.error(f"✗ Failed to load app state: {e}")
+
+    def save_app_state(self):
+        """Save application state for next session"""
+        try:
+            state = {
+                'current_view': self.current_view,
+                'selected_filters': list(self.selected_filters),
+                'window_geometry': self.root.geometry(),
+                'last_opened': datetime.datetime.now().isoformat()
+            }
+
+            self.state_manager.save_app_state(state)
+            logger.info(f"✓ App state saved")
+
+        except Exception as e:
+            logger.error(f"✗ Failed to save app state: {e}")
 
     def setup_modern_ui(self):
         """Setup the modern AI Schedule Agent UI layout with all original features"""
@@ -441,6 +530,11 @@ class ModernSchedulerUI:
             self.status_bar.config(text=message)
             self.root.update_idletasks()
 
+    def refresh_calendar(self):
+        """Refresh the calendar view with current filters"""
+        if hasattr(self, 'calendar_view_tab') and self.calendar_view_tab:
+            self.calendar_view_tab.refresh()
+
     def start_background_tasks(self):
         """Start background threads for notifications and auto-save"""
         # Notification processor thread
@@ -495,6 +589,30 @@ class ModernSchedulerUI:
         save_thread = threading.Thread(target=auto_save, daemon=True)
         save_thread.start()
 
+    def on_closing(self):
+        """Handle window closing - save all state before exit"""
+        try:
+            # Save profile
+            self.save_profile()
+            logger.info("✓ Profile saved on exit")
+
+            # Save app state
+            self.save_app_state()
+            logger.info("✓ App state saved on exit")
+
+            # Save learned patterns
+            if hasattr(self.engine, 'pattern_learner'):
+                patterns = self.engine.pattern_learner.learned_patterns
+                self.state_manager.save_learned_patterns(patterns)
+                logger.info("✓ Learned patterns saved on exit")
+
+        except Exception as e:
+            logger.error(f"✗ Error saving state on exit: {e}")
+        finally:
+            self.root.destroy()
+
     def run(self):
         """Run the application"""
+        # Register close handler
+        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
         self.root.mainloop()
