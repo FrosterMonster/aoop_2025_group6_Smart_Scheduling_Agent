@@ -95,18 +95,33 @@ class NLPProcessor:
                 logger.info(f"Processing with LLM: '{text}'")
                 llm_result = self.llm_agent.process_request(text)
 
-                if llm_result.get('success') and llm_result.get('action') == 'check_schedule':
-                    # LLM requested to check schedule first
-                    logger.info("LLM requested schedule check before scheduling")
-                    return self._handle_check_schedule(llm_result, text)
-                elif llm_result.get('success') and llm_result.get('action') == 'schedule_event':
-                    # Convert LLM result to expected format
-                    return self._convert_llm_result_to_dict(llm_result, text)
-                elif llm_result.get('success') and llm_result.get('action') == 'conversation':
-                    # LLM responded but didn't schedule - return conversation result
-                    logger.info("LLM responded with conversation, no scheduling action")
-                    return {
-                        'action': 'conversation',
+                action = llm_result.get('action')
+
+                if llm_result.get('success'):
+                    if action == 'check_schedule':
+                        logger.info("LLM requested schedule check before scheduling")
+                        return self._handle_check_schedule(llm_result, text)
+                    elif action == 'schedule_event':
+                        return self._convert_llm_result_to_dict(llm_result, text)
+                    elif action == 'query':
+                        logger.info(f"LLM requested query: {llm_result.get('data', {}).get('query_type')}")
+                        return self._handle_query(llm_result, text)
+                    elif action == 'edit_event':
+                        logger.info(f"LLM requested edit: {llm_result.get('data', {}).get('event_identifier')}")
+                        return self._handle_edit(llm_result, text)
+                    elif action == 'delete_event':
+                        logger.info(f"LLM requested delete: {llm_result.get('data', {}).get('event_identifier')}")
+                        return self._handle_delete(llm_result, text)
+                    elif action == 'move_event':
+                        logger.info(f"LLM requested move: {llm_result.get('data', {}).get('event_identifier')}")
+                        return self._handle_move(llm_result, text)
+                    elif action == 'multi_schedule':
+                        logger.info(f"LLM requested multi-schedule: {len(llm_result.get('data', {}).get('multi_events', []))} events")
+                        return self._handle_multi_schedule(llm_result, text)
+                    elif action == 'conversation' or action == 'chat':
+                        logger.info("LLM responded with conversation, no scheduling action")
+                        return {
+                            'action': 'conversation',
                         'response': llm_result.get('response'),
                         'llm_mode': True
                     }
@@ -275,6 +290,83 @@ class NLPProcessor:
 
         return result
 
+    def _handle_query(self, llm_result: Dict, original_text: str) -> Dict:
+        """Handle query action - user wants to view/search their schedule"""
+        data = llm_result.get('data', {})
+        query_data = data.get('query', {})
+
+        return {
+            'action': 'query',
+            'query_type': query_data.get('query_type', 'show_schedule'),
+            'time_range': query_data.get('time_range'),
+            'search_term': query_data.get('search_term'),
+            'llm_response': llm_result.get('response'),
+            'llm_mode': True
+        }
+
+    def _handle_edit(self, llm_result: Dict, original_text: str) -> Dict:
+        """Handle edit action - user wants to modify an existing event"""
+        data = llm_result.get('data', {})
+        edit_data = data.get('edit', {})
+
+        return {
+            'action': 'edit',
+            'event_identifier': edit_data.get('event_identifier'),
+            'changes': edit_data.get('changes', {}),
+            'llm_response': llm_result.get('response'),
+            'llm_mode': True
+        }
+
+    def _handle_delete(self, llm_result: Dict, original_text: str) -> Dict:
+        """Handle delete action - user wants to cancel/remove events"""
+        data = llm_result.get('data', {})
+        delete_data = data.get('delete', {})
+
+        return {
+            'action': 'delete',
+            'event_identifier': delete_data.get('event_identifier'),
+            'time_range': delete_data.get('time_range'),
+            'llm_response': llm_result.get('response'),
+            'llm_mode': True
+        }
+
+    def _handle_move(self, llm_result: Dict, original_text: str) -> Dict:
+        """Handle move action - user wants to reschedule an event"""
+        data = llm_result.get('data', {})
+        move_data = data.get('move', {})
+
+        return {
+            'action': 'move',
+            'event_identifier': move_data.get('event_identifier'),
+            'new_time': move_data.get('new_time'),
+            'llm_response': llm_result.get('response'),
+            'llm_mode': True
+        }
+
+    def _handle_multi_schedule(self, llm_result: Dict, original_text: str) -> Dict:
+        """Handle multi-schedule action - user wants to schedule multiple events"""
+        data = llm_result.get('data', {})
+        events = data.get('multi_events', [])
+
+        # Parse each event
+        parsed_events = []
+        for event in events:
+            parsed_event = {
+                'title': event.get('summary', 'Untitled Event'),
+                'start_time_str': event.get('start_time_str'),
+                'end_time_str': event.get('end_time_str', '1 hour'),
+                'description': event.get('description', ''),
+                'location': event.get('location', '')
+            }
+            parsed_events.append(parsed_event)
+
+        return {
+            'action': 'multi_schedule',
+            'events': parsed_events,
+            'llm_response': llm_result.get('response'),
+            'llm_mode': True
+        }
+
     def _ask_llm_for_optimal_time(self, target_date, duration, title, description, location, original_request):
         """Ask LLM to analyze calendar and suggest optimal time slots
 
@@ -417,67 +509,76 @@ class NLPProcessor:
 
     def _build_schedule_analysis_prompt(self, events_summary, duration, title, description, location, original_request, search_start, search_end):
         """Build prompt for LLM to analyze schedule and suggest time"""
-        prompt = f"""Analyze the following schedule and find the optimal time slot for a new event.
+        hours = duration // 60
+        mins = duration % 60
+        duration_str = f"{hours}h {mins}m" if mins else f"{hours}h"
 
-USER REQUEST: {original_request}
+        prompt = f"""Find an optimal time slot for scheduling.
 
-EVENT DETAILS:
-- Title: {title}
-- Duration: {duration} minutes ({duration // 60} hours {duration % 60} minutes)
-- Description: {description or 'N/A'}
-- Location: {location or 'N/A'}
+Request: {original_request}
+Event: {title}
+Duration: {duration_str}
+Search window: {search_start.strftime('%Y-%m-%d')} to {search_end.strftime('%Y-%m-%d')}
 
 {events_summary}
 
-TASK:
-Please analyze the schedule and suggest the BEST time slot for this event that:
-1. Does NOT conflict with existing events
-2. Falls within normal working hours (9 AM - 6 PM preferred, unless user specified otherwise)
-3. Allows for reasonable breaks between meetings (at least 15 minutes)
-4. Considers the user's request (if they specified a day or time preference)
+Requirements:
+- No conflicts with existing events
+- Working hours: 9 AM - 6 PM (flexible)
+- Allow 15min between events
 
-RESPONSE FORMAT:
-Suggest a specific start time in the format: YYYY-MM-DD HH:MM
-Explain your reasoning briefly.
+Respond with:
+START TIME: YYYY-MM-DD HH:MM
+REASON: Brief explanation
 
-Example response:
-"I suggest scheduling this event on 2025-11-07 at 10:00.
-Reasoning: This time slot is free, falls in the morning when you're typically most productive, and provides a buffer after your 9:00 AM meeting."
-
-Your suggestion:"""
+Example:
+START TIME: 2025-11-07 14:00
+REASON: Free slot in afternoon, no conflicts, good spacing"""
 
         return prompt
 
     def _parse_llm_time_suggestion(self, llm_response):
         """Parse LLM response to extract suggested time"""
+        if not llm_response or llm_response.strip() == '':
+            logger.warning("Empty LLM response for time suggestion")
+            return None
+
         import re
         import datetime
-        import dateparser
 
-        # Try to find datetime in format YYYY-MM-DD HH:MM
-        pattern = r'(\d{4}-\d{2}-\d{2})\s+(?:at\s+)?(\d{1,2}):(\d{2})'
-        match = re.search(pattern, llm_response)
+        # Try multiple patterns to be more flexible
+        patterns = [
+            r'START TIME:\s*(\d{4}-\d{2}-\d{2})\s+(\d{1,2}):(\d{2})',  # New format
+            r'(\d{4}-\d{2}-\d{2})\s+at\s+(\d{1,2}):(\d{2})',  # Old format with "at"
+            r'(\d{4}-\d{2}-\d{2})\s+(\d{1,2}):(\d{2})',  # Simple format
+        ]
 
-        if match:
-            date_str = match.group(1)
-            hour = int(match.group(2))
-            minute = int(match.group(3))
+        for pattern in patterns:
+            match = re.search(pattern, llm_response)
+            if match:
+                date_str = match.group(1)
+                hour = int(match.group(2))
+                minute = int(match.group(3))
 
-            try:
-                suggested_start = datetime.datetime.strptime(date_str, '%Y-%m-%d')
-                suggested_start = suggested_start.replace(hour=hour, minute=minute)
+                try:
+                    suggested_start = datetime.datetime.strptime(date_str, '%Y-%m-%d')
+                    suggested_start = suggested_start.replace(hour=hour, minute=minute)
 
-                # Add timezone
-                import pytz
-                local_tz = pytz.timezone('Asia/Taipei')
-                suggested_start = local_tz.localize(suggested_start)
+                    # Add timezone
+                    import pytz
+                    local_tz = pytz.timezone('Asia/Taipei')
+                    suggested_start = local_tz.localize(suggested_start)
 
-                return {
-                    'start_time': suggested_start,
-                    'reasoning': llm_response
-                }
-            except Exception as e:
-                logger.warning(f"Failed to parse time suggestion: {e}")
+                    # Extract reasoning if present
+                    reasoning_match = re.search(r'REASON:\s*(.+?)(?:\n|$)', llm_response, re.DOTALL)
+                    reasoning = reasoning_match.group(1).strip() if reasoning_match else llm_response
+
+                    return {
+                        'start_time': suggested_start,
+                        'reasoning': reasoning
+                    }
+                except Exception as e:
+                    logger.warning(f"Failed to parse time suggestion: {e}")
 
         logger.warning(f"Could not parse time from LLM response: {llm_response[:200]}")
         return None

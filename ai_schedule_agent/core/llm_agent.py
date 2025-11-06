@@ -228,7 +228,7 @@ class GeminiProvider(BaseLLMProvider):
         return "gemini"
 
     def call_llm(self, messages: List[Dict], tools: List[Dict], max_tokens: int) -> Dict:
-        """Call Gemini API with structured output"""
+        """Call Gemini API with structured output or simple text response"""
         self._ensure_initialized()  # Lazy load on first API call
         import google.generativeai as genai
 
@@ -242,6 +242,42 @@ class GeminiProvider(BaseLLMProvider):
             elif msg['role'] == 'user':
                 user_message = msg['content']
 
+        # Check if this is a simple text prompt (no tools)
+        if not tools or len(tools) == 0:
+            # Simple text generation without structured output
+            full_prompt = ""
+            if system_message:
+                full_prompt += f"{system_message}\n\n"
+            full_prompt += user_message
+
+            try:
+                generation_config = genai.GenerationConfig(
+                    max_output_tokens=max_tokens
+                )
+                response = self.client.generate_content(
+                    full_prompt,
+                    generation_config=generation_config
+                )
+
+                return {
+                    'content': response.text if hasattr(response, 'text') else '',
+                    'tool_calls': [],
+                    'action': 'chat'
+                }
+            except Exception as e:
+                logger.error(f"Gemini API error: {e}")
+                # Try to get partial response
+                try:
+                    if hasattr(response, 'candidates') and response.candidates:
+                        candidate = response.candidates[0]
+                        if hasattr(candidate, 'content') and candidate.content.parts:
+                            partial_text = ''.join(part.text for part in candidate.content.parts if hasattr(part, 'text'))
+                            if partial_text:
+                                return {'content': partial_text, 'tool_calls': [], 'action': 'chat'}
+                except:
+                    pass
+                return {'content': '', 'tool_calls': [], 'action': 'chat', 'error': str(e)}
+
         # Combine system message with user input and tool instructions
         full_prompt = ""
         if system_message:
@@ -251,44 +287,134 @@ class GeminiProvider(BaseLLMProvider):
             # Add structured output instructions
             full_prompt += """Analyze the user's request and respond with structured JSON.
 
-When user wants to schedule WITHOUT specific time, first check their schedule:
+=== QUERY ACTIONS ===
+When user wants to VIEW/CHECK their schedule:
+{
+  "action": "query",
+  "query": {
+    "query_type": "show_schedule" | "find_event" | "check_availability" | "list_events",
+    "time_range": "tomorrow" | "next week" | "Friday afternoon" | "this month",
+    "search_term": "Alex" | "team meeting" | "dentist" (for find_event)
+  },
+  "response": "I'll show you your schedule for [timeframe]."
+}
+
+Examples:
+- "What's on my calendar tomorrow?" -> query (show_schedule, time_range: "tomorrow")
+- "When is my meeting with Alex?" -> query (find_event, search_term: "Alex")
+- "Am I free Friday afternoon?" -> query (check_availability, time_range: "Friday afternoon")
+- "Show me next week" -> query (show_schedule, time_range: "next week")
+
+=== EDIT ACTIONS ===
+When user wants to MODIFY an existing event:
+{
+  "action": "edit_event",
+  "edit": {
+    "event_identifier": "3pm meeting" | "meeting with Alex" | "tomorrow's standup",
+    "changes": {
+      "new_time": "4pm" (if changing time),
+      "new_duration": "2 hours" (if extending),
+      "new_location": "Zoom" (if changing location),
+      "add_participants": ["alex@email.com"] (if adding people),
+      "remove_participants": ["john@email.com"] (if removing people)
+    }
+  },
+  "response": "I'll update your [event] with the new details."
+}
+
+Examples:
+- "Move my 3pm meeting to 4pm" -> edit_event (event: "3pm meeting", new_time: "4pm")
+- "Change tomorrow's location to Zoom" -> edit_event (event: "tomorrow's meeting", new_location: "Zoom")
+- "Add Sarah to my 2pm meeting" -> edit_event (event: "2pm meeting", add_participants: ["Sarah"])
+- "Make my lunch meeting 30 minutes longer" -> edit_event (event: "lunch meeting", new_duration: "+30 minutes")
+
+=== MOVE ACTIONS ===
+When user wants to RESCHEDULE (simpler than edit):
+{
+  "action": "move_event",
+  "move": {
+    "event_identifier": "3pm meeting",
+    "new_time": "tomorrow at 2pm" | "next week same time" | "Friday afternoon"
+  },
+  "response": "I'll move your [event] to [new time]."
+}
+
+Examples:
+- "Reschedule my morning meeting to afternoon" -> move_event
+- "Move everything after 3pm to tomorrow" -> move_event (can be multiple)
+
+=== DELETE ACTIONS ===
+When user wants to CANCEL/REMOVE events:
+{
+  "action": "delete_event",
+  "delete": {
+    "event_identifier": "3pm meeting" | "team standup",
+    "time_range": "Friday afternoon" | "all meetings with John" (for bulk delete)
+  },
+  "response": "I'll cancel your [event]."
+}
+
+Examples:
+- "Cancel my 3pm meeting" -> delete_event (event: "3pm meeting")
+- "Delete tomorrow's team standup" -> delete_event (event: "tomorrow's team standup")
+- "Clear my schedule for Friday afternoon" -> delete_event (time_range: "Friday afternoon")
+- "Remove all meetings with John" -> delete_event (time_range: "all meetings with John")
+
+=== MULTI-SCHEDULE ACTIONS ===
+When user wants to schedule MULTIPLE events at once:
+{
+  "action": "multi_schedule",
+  "multi_events": [
+    {"summary": "Interview 1", "start_time_str": "tomorrow 10am", "end_time_str": "1 hour"},
+    {"summary": "Interview 2", "start_time_str": "tomorrow 2pm", "end_time_str": "1 hour"},
+    {"summary": "Interview 3", "start_time_str": "tomorrow 4pm", "end_time_str": "1 hour"}
+  ],
+  "response": "I'll schedule 3 interviews for you tomorrow."
+}
+
+Examples:
+- "Schedule 3 interviews tomorrow at 10am, 2pm, and 4pm" -> multi_schedule
+- "Block Monday through Wednesday for focus time" -> multi_schedule (3 events)
+
+=== CHECK SCHEDULE THEN BOOK ===
+When user wants to schedule WITHOUT specific time:
 {
   "action": "check_schedule",
-  "date": "date to check (e.g., '11/27', 'tomorrow')",
-  "duration": "required duration (e.g., '3 hours', '4 hrs')",
+  "date": "11/7" | "tomorrow" | "next week",
+  "duration": "3 hours" | "4 hrs" | "90 minutes",
   "event_details": {
     "summary": "event title",
-    "description": "optional description",
-    "location": "optional location"
+    "description": "optional",
+    "location": "optional"
   },
   "response": "Let me check your schedule for [date] to find a good time."
 }
 
-When scheduling WITH specific time, create the event directly:
+Examples:
+- "Schedule 4hr study session on 11/7" -> check_schedule (no specific time)
+- "Need to meet with team sometime" -> check_schedule (vague request)
+- "Block time for project work" -> check_schedule (no specific time)
+
+=== DIRECT SCHEDULING ===
+When scheduling WITH specific time:
 {
   "action": "schedule_event",
   "event": {
     "summary": "event title",
-    "start_time_str": "start time in natural language or standard format",
-    "end_time_str": "end time OR duration string like '3 hours', '2 hrs', '90 minutes'",
-    "description": "optional description",
-    "location": "optional location",
-    "participants": ["optional", "email", "addresses"]
+    "start_time_str": "11/27 at 9pm" | "tomorrow 3pm" | "Friday 10:00",
+    "end_time_str": "11pm" | "3 hours" | "90 minutes",
+    "description": "optional",
+    "location": "optional",
+    "participants": ["optional@email.com"]
   },
-  "response": "Your friendly confirmation message to the user"
+  "response": "I've scheduled [event] for [time]."
 }
 
-IMPORTANT - When to check schedule vs direct scheduling:
-- "schedule 4hr study session on 11/7" -> check_schedule (no specific time)
-- "meeting 11/27 at 9pm for 3 hrs" -> schedule_event (specific time: 9pm)
-- "meeting tomorrow" -> check_schedule (no specific time)
+Examples:
+- "Meeting 11/27 at 9pm for 3 hrs" -> schedule_event (specific time: 9pm)
+- "Team lunch Friday at noon" -> schedule_event (specific time: noon)
 
-For end_time_str:
-- If exact end time: use the end time (e.g., "4pm")
-- If duration: use duration string (e.g., "3 hours")
-- If neither: use "1 hour" default
-
-If user is chatting (not scheduling):
+=== CHAT (NON-SCHEDULING) ===
 {
   "action": "chat",
   "response": "Your helpful response"
@@ -305,7 +431,7 @@ If user is chatting (not scheduling):
                 "action": {
                     "type": "string",
                     "description": "The action to take",
-                    "enum": ["check_schedule", "schedule_event", "chat"]
+                    "enum": ["check_schedule", "schedule_event", "query", "edit_event", "delete_event", "move_event", "multi_schedule", "chat"]
                 },
                 "date": {
                     "type": "string",
@@ -365,6 +491,101 @@ If user is chatting (not scheduling):
                 "response": {
                     "type": "string",
                     "description": "Your response message to the user"
+                },
+                "query": {
+                    "type": "object",
+                    "description": "Query details (for query action)",
+                    "properties": {
+                        "query_type": {
+                            "type": "string",
+                            "enum": ["show_schedule", "find_event", "check_availability", "list_events"],
+                            "description": "Type of query"
+                        },
+                        "time_range": {
+                            "type": "string",
+                            "description": "Time range to query (e.g., 'tomorrow', 'next week', 'Friday afternoon')"
+                        },
+                        "search_term": {
+                            "type": "string",
+                            "description": "Search term for finding specific events (e.g., person name, meeting title)"
+                        }
+                    }
+                },
+                "edit": {
+                    "type": "object",
+                    "description": "Edit details (for edit_event action)",
+                    "properties": {
+                        "event_identifier": {
+                            "type": "string",
+                            "description": "How to identify the event (e.g., '3pm meeting', 'meeting with Alex', 'tomorrow morning meeting')"
+                        },
+                        "changes": {
+                            "type": "object",
+                            "properties": {
+                                "new_time": {"type": "string", "description": "New time if changing time"},
+                                "new_duration": {"type": "string", "description": "New duration if extending/shortening"},
+                                "new_location": {"type": "string", "description": "New location if changing location"},
+                                "add_participants": {"type": "array", "items": {"type": "string"}, "description": "Participants to add"},
+                                "remove_participants": {"type": "array", "items": {"type": "string"}, "description": "Participants to remove"}
+                            }
+                        }
+                    }
+                },
+                "delete": {
+                    "type": "object",
+                    "description": "Delete details (for delete_event action)",
+                    "properties": {
+                        "event_identifier": {
+                            "type": "string",
+                            "description": "How to identify the event to delete"
+                        },
+                        "time_range": {
+                            "type": "string",
+                            "description": "Time range for bulk delete (e.g., 'Friday afternoon', 'all meetings with John')"
+                        }
+                    }
+                },
+                "move": {
+                    "type": "object",
+                    "description": "Move details (for move_event action)",
+                    "properties": {
+                        "event_identifier": {
+                            "type": "string",
+                            "description": "Event to move"
+                        },
+                        "new_time": {
+                            "type": "string",
+                            "description": "New time (e.g., '4pm', 'tomorrow', 'next week same time')"
+                        }
+                    }
+                },
+                "multi_events": {
+                    "type": "array",
+                    "description": "Multiple events (for multi_schedule action)",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "summary": {"type": "string"},
+                            "start_time_str": {"type": "string"},
+                            "end_time_str": {"type": "string"},
+                            "description": {"type": "string"},
+                            "location": {"type": "string"}
+                        }
+                    }
+                },
+                "check_schedule": {
+                    "type": "object",
+                    "description": "Check schedule details (for check_schedule action)",
+                    "properties": {
+                        "event_details": {
+                            "type": "object",
+                            "properties": {
+                                "summary": {"type": "string"},
+                                "description": {"type": "string"},
+                                "location": {"type": "string"}
+                            }
+                        }
+                    }
                 }
             },
             "required": ["action", "response"]
