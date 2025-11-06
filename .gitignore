@@ -12,6 +12,10 @@ user_profile.json
 .config/logs/
 .config/data/
 
+# Environment variables (NEVER commit API keys!)
+.env
+.env.local
+
 # Allow template/example files to be committed (for team sharing)
 !.config/*.example
 !.config/*.template

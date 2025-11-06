@@ -1,211 +1,199 @@
-# AI Schedule Agent
+# 🤖 AI Schedule Agent
 
-Intelligent Personal Scheduling Assistant that integrates with Google Calendar and learns from user patterns.
+> Intelligent Personal Scheduling Assistant with Google Calendar integration and AI-powered pattern learning.
 
-## Quick Start
+## ✨ Features
 
-### 1. One-Command Setup
+- 🗣️ **Natural Language Processing** - Schedule events using plain English
+- 📅 **Google Calendar Sync** - Seamless two-way integration
+- 🧠 **AI Pattern Learning** - Learns from your scheduling habits
+- 📊 **Insights & Analytics** - Understand your time usage
+- 🎨 **Modern UI** - Beautiful sidebar interface with glassmorphism
+- 🌍 **Multi-language** - English & Traditional Chinese (繁體中文)
+- ⚡ **Fast** - 3-second startup with lazy loading
 
-```bash
-./setup.sh
-```
+## 🚀 Quick Start
 
-This will:
-- ✓ Create your own virtual environment
-- ✓ Install all dependencies
-- ✓ Download NLP model
-- ✓ Create configuration files
-
-### 2. Add Google Credentials
-
-Get OAuth credentials from [Google Cloud Console](https://console.cloud.google.com/):
-1. Create project → Enable Google Calendar API
-2. Create OAuth 2.0 Client ID (Desktop app)
-3. Download JSON file
+### 1. Setup (One Command)
 
 ```bash
-cp ~/Downloads/client_secret_*.json .config/credentials.json
+./venv_setup.sh
 ```
 
-### 3. Run the Application
+This installs dependencies, downloads NLP models, and creates config files.
+
+### 2. Configure API Keys
+
+**LLM Provider** (choose one):
+```bash
+# Option A: Claude (Anthropic) - Recommended
+echo "ANTHROPIC_API_KEY=sk-ant-your-key-here" >> .env
+echo "LLM_PROVIDER=claude" >> .env
+
+# Option B: OpenAI
+echo "OPENAI_API_KEY=sk-your-key-here" >> .env
+echo "LLM_PROVIDER=openai" >> .env
+
+# Option C: Google Gemini (Free tier available)
+echo "GEMINI_API_KEY=your-gemini-key-here" >> .env
+echo "LLM_PROVIDER=gemini" >> .env
+```
+
+**Google Calendar**:
+1. Get OAuth credentials from [Google Cloud Console](https://console.cloud.google.com/)
+2. Save to `.config/credentials.json`
+
+### 3. Run
 
 ```bash
 ./run.sh
 ```
 
-**That's it!** 🚀
+**That's it!** 🎉
 
----
+## 📚 Documentation
 
-## System Requirements
+- **[Complete Documentation](docs/)** - All guides and references
+- **[Setup Guide](docs/guides/SETUP_INSTRUCTIONS.md)** - Detailed setup instructions
+- **[Modern UI Guide](docs/guides/MODERN_UI_GUIDE.md)** - Learn the new interface
+- **[LLM Setup](docs/guides/LLM_SETUP_GUIDE.md)** - Configure AI providers
 
-- **Python:** 3.9, 3.10, 3.11, or 3.12 (3.11 recommended)
-- **OS:** Windows, Linux, or macOS
-- **Google Account:** For Calendar integration
+## 🎨 Modern UI
 
----
+The app features a beautiful, modern sidebar interface:
 
-## Documentation
+<img src="https://via.placeholder.com/800x500?text=AI+Schedule+Agent+Screenshot" alt="App Screenshot" width="600"/>
 
-- **[QUICKSTART.md](QUICKSTART.md)** - Fast setup guide
-- **[NEW_USER_SETUP.md](NEW_USER_SETUP.md)** - Detailed setup instructions
-- **[WHAT_TO_MODIFY.md](WHAT_TO_MODIFY.md)** - What files to edit
-- **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** - Common issues and solutions
-- **[.config/README.md](.config/README.md)** - Configuration details
+**Key Features:**
+- 🤖 Sidebar navigation with AI branding
+- 📱 Glassmorphism design (2024 trends)
+- 🎯 Color-coded event filters
+- ⚡ Instant tab switching
+- 🌙 Calming blue color scheme
 
----
-
-## Important Notes
-
-### ⚠️ Do NOT Commit `venv/`
-
-**Each user must create their own virtual environment!**
-
-The `venv/` directory is git-ignored. Never commit it. Always run:
+**Switch UI modes:**
 ```bash
-./setup.sh
-```
-
-This ensures everyone uses compatible Python packages for their system.
-
-### ⚠️ Do NOT Commit Credentials
-
-Your personal credentials in `.config/` are git-ignored:
-- `credentials.json` - Your Google API credentials
-- `token.pickle` - Your auth token
-- `user_profile.json` - Your preferences
-- `settings.json`, `paths.json` - Your config
-
-Only `.example` and `.template` files are shared via git.
-
----
-
-## Project Structure
-
-```
-.
-├── setup.sh                # Complete setup script (run this first!)
-├── run.sh                  # Run the application
-├── tmp.py                  # Main application code
-├── requirements.txt        # Python dependencies
-│
-├── .config/                # Configuration (user-specific, git-ignored)
-│   ├── README.md           # Config documentation
-│   ├── *.example           # Templates (shared via git)
-│   ├── credentials.json    # YOUR Google credentials (not in git)
-│   └── settings.json       # YOUR settings (not in git)
-│
-├── Documentation files:
-│   ├── QUICKSTART.md       # Fast setup guide
-│   ├── NEW_USER_SETUP.md   # Detailed setup guide
-│   ├── WHAT_TO_MODIFY.md   # What files to edit
-│   └── TROUBLESHOOTING.md  # Common issues
-│
-└── venv/                   # YOUR virtual env (not in git, create with setup.sh)
-```
-
----
-
-## For Team Members
-
-When you clone this repo:
-
-```bash
-# 1. Run setup
-./setup.sh
-
-# 2. Add your credentials
-cp ~/Downloads/your-credentials.json .config/credentials.json
-
-# 3. Run
+# Modern UI (default)
 ./run.sh
+
+# Classic UI
+USE_MODERN_UI=false ./run.sh
 ```
 
-Your setup won't conflict with other team members because:
-- Each user creates their own `venv/`
-- Each user has their own `.config/` files
-- Everything personal is git-ignored
+## 💡 Usage Examples
 
----
+### Natural Language Scheduling
 
-## Features
-
-- **Smart Scheduling:** AI-powered event scheduling
-- **Google Calendar Integration:** Seamless sync with your calendar
-- **Natural Language Processing:** Schedule events with natural language
-- **Pattern Learning:** Learns from your scheduling habits
-- **Conflict Detection:** Automatically detects scheduling conflicts
-- **Priority Management:** Handles urgent vs. flexible events
-- **Desktop Notifications:** Reminders for upcoming events
-- **Email Notifications:** Optional email reminders
-
----
-
-## Troubleshooting
-
-### NumPy Import Error
-
-If you see `ModuleNotFoundError: No module named 'numpy._core'`:
-
-```bash
-rm -rf venv
-./setup.sh
+```
+"Team meeting tomorrow at 2pm for 1 hour"
+"Coffee with John next Friday morning"
+"Weekly standup every Monday at 9am"
 ```
 
-See [FIX_NUMPY_ERROR.md](FIX_NUMPY_ERROR.md) for details.
+### Quick Actions
 
-### Python Version Issues
+- **⚡ Quick Schedule** - Create events with NLP
+- **📅 Calendar View** - See your full schedule
+- **⚙️ Settings** - Configure preferences
+- **📊 Insights** - View analytics
 
-The app requires Python 3.9-3.12. Check your version:
+## 🛠️ System Requirements
 
-```bash
-python --version
+- **Python**: 3.9, 3.10, 3.11, or 3.12 (3.11 recommended)
+- **OS**: Windows, Linux, or macOS
+- **Google Account**: For Calendar integration
+- **API Key**: Claude (Anthropic) or OpenAI
+
+## 📦 Project Structure
+
+```
+ai_schedule_agent/
+├── core/                 # Core scheduling logic
+│   ├── scheduling_engine.py
+│   ├── nlp_processor.py
+│   └── pattern_learner.py
+├── ui/                   # User interface
+│   ├── modern_main_window.py  # Modern sidebar UI
+│   ├── main_window.py         # Classic tabbed UI
+│   ├── modern_theme.py        # Styling system
+│   └── tabs/                  # Tab components
+├── integrations/        # External services
+│   ├── google_calendar.py
+│   ├── llm_provider.py
+│   └── notifications.py
+├── models/              # Data models
+└── utils/               # Utilities
+
+docs/                    # Documentation
+├── guides/              # User guides
+├── development/         # Developer docs
+└── archive/             # Historical docs
+
+.config/                 # User configuration
+└── *.example            # Template files
 ```
 
-See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for more solutions.
+## ⚡ Performance
+
+- **Startup**: ~3-4 seconds
+- **Memory**: Lightweight (~50MB)
+- **Lazy Loading**: Heavy components load on demand
+- **Fast**: Optimized imports and caching
+
+See [Performance Docs](docs/development/PERFORMANCE_OPTIMIZATIONS.md) for details.
+
+## 🌍 Internationalization
+
+Fully supports:
+- 🇬🇧 **English** (en)
+- 🇹🇼 **繁體中文** (zh_TW)
+
+More languages can be added easily. See [i18n Guide](docs/guides/I18N_QUICK_START.md).
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit changes (`git commit -m 'Add amazing feature'`)
+4. Push to branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## 📝 License
+
+This project is for educational purposes.
+
+## 🙏 Acknowledgments
+
+- **spaCy** - Natural language processing
+- **Google Calendar API** - Calendar integration
+- **Anthropic Claude** - AI-powered scheduling
+- **OpenAI** - Alternative LLM provider
+
+## 📧 Support
+
+- **Issues**: [GitHub Issues](https://github.com/your-repo/issues)
+- **Documentation**: [docs/](docs/)
+- **Email**: Contact your team
 
 ---
 
-## Getting Help
+## 📖 Quick Links
 
-1. **Check documentation:**
-   - [TROUBLESHOOTING.md](TROUBLESHOOTING.md) - Common issues
-   - [NEW_USER_SETUP.md](NEW_USER_SETUP.md) - Setup help
+### For Users
+- [Complete Setup Guide](docs/guides/SETUP_INSTRUCTIONS.md)
+- [Modern UI Guide](docs/guides/MODERN_UI_GUIDE.md)
+- [LLM Configuration](docs/guides/LLM_SETUP_GUIDE.md)
 
-2. **Verify your setup:**
-   ```bash
-   python --version  # Should be 3.9-3.12
-   ./venv/Scripts/python.exe --version  # Should match
-   ```
+### For Developers
+- [Architecture Overview](docs/development/REFACTORING_SUMMARY.md)
+- [Performance Details](docs/development/PERFORMANCE_OPTIMIZATIONS.md)
+- [Before/After Comparison](docs/development/BEFORE_AFTER_COMPARISON.md)
 
-3. **Clean reinstall:**
-   ```bash
-   rm -rf venv
-   ./setup.sh
-   ```
+### Documentation Index
+📚 **[Full Documentation Index](docs/README.md)** - All guides and references
 
 ---
 
-## Contributing
+**Made with ❤️ by NYCU AOOP Group 6**
 
-When contributing:
-1. **Never commit `venv/`** - Each user creates their own
-2. **Never commit personal config** - Only commit `.example`/`.template` files
-3. **Test with different Python versions** - Support 3.9-3.12
-4. **Update documentation** - Keep guides current
-
----
-
-## License
-
-[Add your license here]
-
----
-
-## Credits
-
-Developed by [Your Team Name] - NYCU AOOP 2025 Group 6
-
----
-
-**Ready to schedule smarter?** Run `./setup.sh` to begin! 🚀
+*AI Schedule Agent - Your intelligent scheduling companion* 🚀
