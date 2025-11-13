@@ -4,6 +4,29 @@
     "window_width": 1200,
     "window_height": 800
   },
+  "google_calendar": {
+    "timezone": "Asia/Taipei",
+    "default_event_duration_minutes": 60
+  },
+  "llm": {
+    "provider": "claude",
+    "max_tokens": 1000,
+    "claude": {
+      "model": "claude-3-5-sonnet-20241022",
+      "api_key": null
+    },
+    "openai": {
+      "model": "gpt-3.5-turbo",
+      "api_key": null
+    },
+    "gemini": {
+      "model": "gemini-pro",
+      "api_key": null
+    }
+  },
+  "nlp": {
+    "spacy_model": "en_core_web_sm"
+  },
   "notifications": {
     "desktop_enabled": true,
     "email_enabled": false,
@@ -18,6 +41,7 @@
   },
   "logging": {
     "level": "INFO",
-    "file_enabled": true
+    "file_enabled": true,
+    "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
   }
 }
