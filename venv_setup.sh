@@ -72,17 +72,77 @@ print_detail "Python version: $PYTHON_MAJOR.$PYTHON_MINOR.$PYTHON_PATCH"
 if [ "$PYTHON_MAJOR" -lt 3 ] || [ "$PYTHON_MINOR" -lt 9 ]; then
     print_error "Python 3.9 or higher is required. You have Python $PYTHON_VERSION"
     exit 1
-elif [ "$PYTHON_MINOR" -gt 12 ]; then
-    print_warning "Python 3.12 or lower is recommended. You have Python $PYTHON_VERSION"
+elif [ "$PYTHON_MINOR" -gt 13 ]; then
+    print_warning "Python 3.13 or lower is recommended. You have Python $PYTHON_VERSION"
     print_warning "The application might work, but hasn't been tested with this version"
 else
-    print_success "Python version is compatible"
+    print_success "Python version is compatible (3.9-3.13 supported)"
 fi
 
 echo ""
 
-# Step 2: Check or create virtual environment
-echo "Step 2: Setting up virtual environment..."
+# Step 2: Check for tkinter (GUI library)
+echo "Step 2: Checking tkinter (GUI library)..."
+print_detail "Verifying tkinter installation..."
+
+TKINTER_INSTALLED=false
+if $PYTHON_CMD -c "import tkinter" 2>/dev/null; then
+    TKINTER_VERSION=$($PYTHON_CMD -c "import tkinter; print(tkinter.TkVersion)" 2>/dev/null)
+    print_success "tkinter found (version $TKINTER_VERSION)"
+    TKINTER_INSTALLED=true
+else
+    print_error "tkinter NOT found - GUI will not work!"
+    echo ""
+    print_warning "tkinter is required for the application UI"
+    print_info "Install instructions:"
+    echo ""
+
+    # Detect OS and show appropriate install command
+    if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+        if command -v apt-get &> /dev/null; then
+            print_detail "Ubuntu/Debian:"
+            echo "  sudo apt-get update"
+            echo "  sudo apt-get install python3-tk"
+        elif command -v dnf &> /dev/null; then
+            print_detail "Fedora/RHEL:"
+            echo "  sudo dnf install python3-tkinter"
+        elif command -v pacman &> /dev/null; then
+            print_detail "Arch Linux:"
+            echo "  sudo pacman -S tk"
+        else
+            print_detail "Linux:"
+            echo "  Install python3-tk using your package manager"
+        fi
+    elif [[ "$OSTYPE" == "darwin"* ]]; then
+        print_detail "macOS:"
+        echo "  brew install python-tk"
+    elif [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" ]]; then
+        print_detail "Windows:"
+        echo "  Repair Python installation:"
+        echo "  Settings → Apps → Python → Modify"
+        echo "  Ensure 'tcl/tk and IDLE' is checked"
+    fi
+
+    echo ""
+    print_info "After installing tkinter, run this script again"
+    echo ""
+
+    # Ask user if they want to continue
+    read -p "Continue setup anyway? (y/N): " -n 1 -r
+    echo ""
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        print_info "Setup cancelled. Please install tkinter and try again."
+        print_detail "Test tkinter: python3 -m tkinter"
+        print_detail "Full guide: docs/guides/TKINTER_INSTALLATION.md"
+        exit 1
+    fi
+    print_warning "Continuing without tkinter (app will not run)"
+fi
+
+echo ""
+
+# Step 3: Check or create virtual environment
+echo "Step 3: Setting up virtual environment..."
 print_detail "Checking for existing virtual environment..."
 
 VENV_EXISTS=false
@@ -145,19 +205,32 @@ fi
 echo ""
 
 # Step 4: Upgrade pip
-echo "Step 3: Upgrading pip..."
+echo "Step 4: Upgrading pip..."
 print_detail "Getting current pip version..."
 OLD_PIP_VERSION=$($VENV_PYTHON -m pip --version 2>&1 | awk '{print $2}')
 print_detail "Current pip version: $OLD_PIP_VERSION"
 print_detail "Upgrading pip to latest version..."
-$VENV_PYTHON -m pip install --upgrade pip --quiet
-NEW_PIP_VERSION=$($VENV_PYTHON -m pip --version 2>&1 | awk '{print $2}')
-print_success "Pip upgraded: $OLD_PIP_VERSION → $NEW_PIP_VERSION"
+
+# Upgrade pip with error handling
+if $VENV_PYTHON -m pip install --upgrade pip --quiet 2>/dev/null; then
+    NEW_PIP_VERSION=$($VENV_PYTHON -m pip --version 2>&1 | awk '{print $2}')
+    print_success "Pip upgraded: $OLD_PIP_VERSION → $NEW_PIP_VERSION"
+else
+    print_warning "Pip upgrade had issues, but continuing..."
+    print_detail "This is usually not critical"
+fi
 echo ""
 
 # Step 5: Install/Update dependencies
-echo "Step 4: Checking and installing Python packages..."
+echo "Step 5: Checking and installing Python packages..."
 print_detail "Reading requirements from: requirements.txt"
+
+# Verify requirements.txt exists
+if [ ! -f "requirements.txt" ]; then
+    print_error "requirements.txt not found!"
+    print_info "Are you in the project root directory?"
+    exit 1
+fi
 
 # Count packages in requirements
 PACKAGE_COUNT=$(grep -v '^#' requirements.txt | grep -v '^$' | wc -l)
@@ -201,19 +274,38 @@ else
     done
     echo ""
 
-    print_detail "Installing missing packages..."
-    $VENV_PYTHON -m pip install -r requirements.txt --quiet
+    print_detail "Installing missing packages (this may take a few minutes)..."
+    print_info "Installing packages for Python $PYTHON_VERSION..."
 
-    if [ $? -eq 0 ]; then
+    # Try quiet install first
+    if $VENV_PYTHON -m pip install -r requirements.txt --quiet 2>/dev/null; then
         print_success "Packages installed successfully"
         INSTALLED_AFTER=$($VENV_PYTHON -m pip list --format=freeze 2>/dev/null | wc -l)
         NEW_PACKAGES=$((INSTALLED_AFTER - INSTALLED_BEFORE))
         print_detail "Installed $NEW_PACKAGES new packages"
     else
-        print_error "Package installation failed"
-        print_info "Trying verbose installation..."
-        $VENV_PYTHON -m pip install -r requirements.txt
-        exit 1
+        print_warning "Quiet install failed, trying with output..."
+        print_detail "You will see detailed installation progress..."
+        echo ""
+
+        # Try verbose install
+        if $VENV_PYTHON -m pip install -r requirements.txt; then
+            print_success "Packages installed successfully"
+        else
+            print_error "Package installation failed!"
+            echo ""
+            print_info "Common issues and solutions:"
+            print_detail "1. Network connection - check internet access"
+            print_detail "2. Compiler missing (for source builds)"
+            print_detail "   Ubuntu/Debian: sudo apt-get install build-essential"
+            print_detail "   macOS: xcode-select --install"
+            print_detail "3. Python headers missing"
+            print_detail "   Ubuntu/Debian: sudo apt-get install python3-dev"
+            echo ""
+            print_info "Try running manually:"
+            print_detail "$VENV_PYTHON -m pip install -r requirements.txt --verbose"
+            exit 1
+        fi
     fi
 fi
 
@@ -222,30 +314,55 @@ print_detail "Total packages in environment: $INSTALLED_COUNT"
 echo ""
 
 # Step 6: Download spacy model
-echo "Step 5: Downloading NLP language model..."
+echo "Step 6: Downloading NLP language model..."
 print_detail "Checking if spacy model 'en_core_web_sm' is already installed..."
-if $VENV_PYTHON -c "import spacy; spacy.load('en_core_web_sm')" 2>/dev/null; then
-    print_info "Model 'en_core_web_sm' already installed, skipping download"
-else
-    print_detail "Downloading spaCy model: en_core_web_sm (~15MB)"
-    print_detail "This includes: tokenizer, parser, NER, word vectors"
-    $VENV_PYTHON -m spacy download en_core_web_sm
-fi
 
-if [ $? -eq 0 ]; then
-    print_success "Language model downloaded"
+MODEL_INSTALLED=false
+if $VENV_PYTHON -c "import spacy; spacy.load('en_core_web_sm')" 2>/dev/null; then
+    print_success "Model 'en_core_web_sm' already installed"
+    MODEL_INSTALLED=true
     MODEL_INFO=$($VENV_PYTHON -m spacy info en_core_web_sm 2>/dev/null | grep -E "lang|name|version" | head -3)
     print_detail "Model info: $(echo $MODEL_INFO | tr '\n' ' ')"
 else
-    print_error "Failed to download language model"
-    print_info "You can try manually: $VENV_PYTHON -m spacy download en_core_web_sm"
+    print_detail "Downloading spaCy model: en_core_web_sm (~15MB)"
+    print_detail "This includes: tokenizer, parser, NER, word vectors"
+    print_info "This may take 1-2 minutes depending on your connection..."
+
+    if $VENV_PYTHON -m spacy download en_core_web_sm 2>&1 | tee /tmp/spacy_download.log; then
+        if $VENV_PYTHON -c "import spacy; spacy.load('en_core_web_sm')" 2>/dev/null; then
+            print_success "Language model downloaded and verified"
+            MODEL_INSTALLED=true
+        else
+            print_error "Model downloaded but verification failed"
+            MODEL_INSTALLED=false
+        fi
+    else
+        print_error "Failed to download language model"
+        print_info "This is not critical - the app will work with reduced NLP features"
+        print_detail "You can install it later: $VENV_PYTHON -m spacy download en_core_web_sm"
+        MODEL_INSTALLED=false
+    fi
 fi
 echo ""
 
 # Step 7: Setup configuration
-echo "Step 6: Setting up configuration files..."
-print_detail "Running setup_config.sh..."
-bash setup_config.sh
+echo "Step 7: Setting up configuration files..."
+print_detail "Checking for setup_config.sh..."
+
+if [ -f "setup_config.sh" ]; then
+    print_detail "Running setup_config.sh..."
+    if bash setup_config.sh; then
+        print_success "Configuration files setup complete"
+    else
+        print_warning "setup_config.sh had issues, but continuing..."
+        print_detail "Configuration files may need manual setup"
+    fi
+else
+    print_warning "setup_config.sh not found, skipping config setup"
+    print_detail "Creating .config directory manually..."
+    mkdir -p .config
+    print_success ".config directory created"
+fi
 
 echo ""
 
@@ -272,8 +389,19 @@ echo ""
 
 # Step 9: Final verification and summary
 echo ""
-print_detail "Verifying installation..."
-print_detail "Checking key packages:"
+echo "Step 8: Verifying installation..."
+print_detail "Running final checks..."
+
+# Check tkinter again (in case it was installed during setup)
+print_detail "Checking tkinter availability..."
+if $PYTHON_CMD -c "import tkinter" 2>/dev/null; then
+    TKINTER_VERSION=$($PYTHON_CMD -c "import tkinter; print(tkinter.TkVersion)" 2>/dev/null)
+    print_detail "  ✓ tkinter ($TKINTER_VERSION)"
+else
+    print_detail "  ✗ tkinter (NOT INSTALLED - GUI will not work!)"
+fi
+
+print_detail "Checking key Python packages:"
 
 # Verify critical packages
 VERIFY_PACKAGES=("google-auth" "google-api-python-client" "openai" "anthropic" "spacy" "python-dotenv" "pytz")
@@ -300,10 +428,26 @@ echo ""
 print_success "Python environment is ready"
 print_success "Configuration files created"
 print_success ".env file initialized"
+
+# Check tkinter one more time for final summary
+if ! $PYTHON_CMD -c "import tkinter" 2>/dev/null; then
+    echo ""
+    print_error "CRITICAL: tkinter is NOT installed!"
+    print_warning "The application GUI will NOT work without tkinter"
+    print_info "Install tkinter before running the app:"
+    echo "  See: docs/guides/TKINTER_INSTALLATION.md"
+    echo "  Test: python3 -m tkinter"
+    echo "  Quick test: python test_tkinter.py"
+fi
+
 echo ""
 print_warning "IMPORTANT: You still need to configure API keys and credentials!"
 echo ""
 echo "Next steps:"
+echo ""
+echo "  0. Verify tkinter is installed (REQUIRED for GUI):"
+echo "     python test_tkinter.py"
+echo "     OR: python3 -m tkinter"
 echo ""
 echo "  1. Choose your LLM provider and add API key to .env:"
 echo "     Edit: .env"

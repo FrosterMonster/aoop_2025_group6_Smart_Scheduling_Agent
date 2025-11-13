@@ -99,10 +99,43 @@ USE_MODERN_UI=false ./run.sh
 
 ## 🛠️ System Requirements
 
-- **Python**: 3.9, 3.10, 3.11, or 3.12 (3.11 recommended)
+- **Python**: 3.9, 3.10, 3.11, 3.12, or 3.13 (3.11/3.12 recommended)
 - **OS**: Windows, Linux, or macOS
+- **GUI Library**: tkinter (see installation below)
 - **Google Account**: For Calendar integration
-- **API Key**: Claude (Anthropic) or OpenAI
+- **API Key**: Claude (Anthropic), OpenAI, or Gemini
+
+### 📦 Installing Prerequisites
+
+#### Linux (Ubuntu/Debian)
+```bash
+sudo apt-get update
+sudo apt-get install python3 python3-pip python3-venv python3-tk
+```
+
+#### Linux (Fedora/RHEL)
+```bash
+sudo dnf install python3 python3-pip python3-tkinter
+```
+
+#### macOS
+```bash
+brew install python@3.12  # Includes tkinter
+```
+
+#### Windows
+- Download Python from [python.org](https://www.python.org/downloads/)
+- During installation, ensure "tcl/tk and IDLE" is checked
+- tkinter is included by default
+
+#### Verify Installation
+```bash
+python3 -m tkinter  # Should show a test window
+# OR
+python test_tkinter.py
+```
+
+**Troubleshooting**: If you see "No module named 'tkinter'", see [TKINTER_INSTALLATION.md](docs/guides/TKINTER_INSTALLATION.md)
 
 ## 📦 Project Structure
 

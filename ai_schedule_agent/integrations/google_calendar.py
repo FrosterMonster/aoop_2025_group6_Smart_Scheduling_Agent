@@ -44,16 +44,53 @@ class CalendarIntegration:
         # If there are no (valid) credentials available, let the user log in
         if not creds or not creds.valid:
             if creds and creds.expired and creds.refresh_token:
-                creds.refresh(Request())
+                try:
+                    logger.info("Refreshing expired access token...")
+                    creds.refresh(Request())
+                    logger.info("✓ Token refreshed successfully")
+                except Exception as refresh_error:
+                    logger.warning(f"Token refresh failed: {refresh_error}")
+                    logger.info("Deleting expired token and requesting new authentication...")
+                    # Delete expired token
+                    if os.path.exists(token_file):
+                        os.remove(token_file)
+                    # Request new authentication
+                    if not os.path.exists(credentials_file):
+                        raise FileNotFoundError(
+                            f"Google credentials file not found at {credentials_file}. "
+                            f"Please follow the setup instructions in .config/README.md"
+                        )
+                    flow = InstalledAppFlow.from_client_secrets_file(
+                        credentials_file, SCOPES)
+                    creds = flow.run_local_server(port=0)
             else:
                 if not os.path.exists(credentials_file):
                     raise FileNotFoundError(
                         f"Google credentials file not found at {credentials_file}. "
                         f"Please follow the setup instructions in .config/README.md"
                     )
+                logger.info("=" * 60)
+                logger.info("GOOGLE CALENDAR AUTHENTICATION REQUIRED")
+                logger.info("=" * 60)
+                logger.info("A browser window will open for one-time authentication.")
+                logger.info("Steps:")
+                logger.info("  1. Sign in to your Google account")
+                logger.info("  2. Grant calendar access permissions")
+                logger.info("  3. Browser will show 'Authentication successful'")
+                logger.info("  4. Return to the application")
+                logger.info("")
+                logger.info("This only needs to be done ONCE. Token will be saved.")
+                logger.info("=" * 60)
+
                 flow = InstalledAppFlow.from_client_secrets_file(
                     credentials_file, SCOPES)
                 creds = flow.run_local_server(port=0)
+
+                logger.info("=" * 60)
+                logger.info("✓ AUTHENTICATION SUCCESSFUL")
+                logger.info("=" * 60)
+                logger.info("Token saved. You won't need to authenticate again.")
+                logger.info("=" * 60)
 
             # Save credentials for next run
             with open(token_file, 'wb') as token:
