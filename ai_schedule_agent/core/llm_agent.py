@@ -420,7 +420,13 @@ Examples:
 ✓ "Meeting tomorrow at 2pm" -> start_time_str: "tomorrow 2pm", end_time_str: "1 hour"
 ✓ "Call today 9am for 30 minutes" -> start_time_str: "today 9am", end_time_str: "30 minutes"
 ✓ "Team lunch Friday noon" -> start_time_str: "Friday 12pm", end_time_str: "1 hour"
+✓ "aoop meeting at 11/20 pm7" -> start_time_str: "2025-11-20 19:00", end_time_str: "1 hour"
 ✗ "Meeting at 2pm" -> BAD (missing date - should be "today 2pm" or "tomorrow 2pm")
+
+IMPORTANT: Handle unusual formats:
+- "pm7" or "am9" means "7pm" or "9am"
+- "11/20" means "2025-11-20" (current year)
+- "11/20 pm7" -> "2025-11-20 19:00"
 
 === CHAT (NON-SCHEDULING) ===
 {
@@ -616,7 +622,22 @@ Examples:
 
         # Parse the structured JSON response
         try:
-            structured_data = json.loads(response.text)
+            # Get the response text
+            response_text = response.text if hasattr(response, 'text') else ''
+
+            if not response_text:
+                logger.error("Gemini returned empty response")
+                return {
+                    'content': 'I encountered an issue processing your request. Please try again.',
+                    'tool_calls': [],
+                    'action': 'chat'
+                }
+
+            # Log the raw response for debugging
+            logger.debug(f"Gemini raw response: {response_text[:500]}")
+
+            # Try to parse JSON
+            structured_data = json.loads(response_text)
 
             result = {
                 'content': structured_data.get('response', ''),
@@ -647,8 +668,24 @@ Examples:
 
         except json.JSONDecodeError as e:
             logger.error(f"Failed to parse Gemini structured output: {e}")
+            logger.error(f"Problematic JSON (first 500 chars): {response.text[:500] if hasattr(response, 'text') else 'N/A'}")
+
+            # Try to extract any useful information from the malformed response
+            try:
+                response_text = response.text if hasattr(response, 'text') else ''
+
+                # Check if response contains any indication of what the user wants
+                if 'schedule' in response_text.lower() or 'meeting' in response_text.lower():
+                    return {
+                        'content': 'I understand you want to schedule something, but I had trouble processing the details. Please try rephrasing your request with clear date, time, and title.',
+                        'tool_calls': [],
+                        'action': 'chat'
+                    }
+            except:
+                pass
+
             return {
-                'content': response.text,
+                'content': 'I had trouble understanding your request. Please try again with a clear format like: "Schedule [event name] on [date] at [time] for [duration]"',
                 'tool_calls': [],
                 'action': 'chat'
             }
