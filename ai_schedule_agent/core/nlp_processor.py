@@ -405,19 +405,30 @@ class NLPProcessor:
         search_end = search_start + timedelta(days=search_days)
 
         # Convert to UTC for Google Calendar API
+        import pytz
         if hasattr(search_start, 'tzinfo') and search_start.tzinfo is not None:
             search_start_utc = search_start.astimezone(datetime.timezone.utc)
             search_end_utc = search_end.astimezone(datetime.timezone.utc)
         else:
-            search_start_utc = search_start
-            search_end_utc = search_end
+            # Naive datetime - assume local timezone
+            local_tz = pytz.timezone('Asia/Taipei')
+            search_start = local_tz.localize(search_start)
+            search_end = local_tz.localize(search_end)
+            search_start_utc = search_start.astimezone(datetime.timezone.utc)
+            search_end_utc = search_end.astimezone(datetime.timezone.utc)
 
         # Fetch existing events
         try:
-            existing_events = self.calendar.get_events(
-                search_start_utc.isoformat().replace('+00:00', 'Z'),
-                search_end_utc.isoformat().replace('+00:00', 'Z')
-            )
+            # Ensure proper RFC3339 format with 'Z' suffix
+            time_min = search_start_utc.isoformat().replace('+00:00', 'Z')
+            time_max = search_end_utc.isoformat().replace('+00:00', 'Z')
+
+            # Validate format (should end with 'Z')
+            if not time_min.endswith('Z') or not time_max.endswith('Z'):
+                logger.error(f"Invalid timestamp format: time_min={time_min}, time_max={time_max}")
+                return None
+
+            existing_events = self.calendar.get_events(time_min, time_max)
         except Exception as e:
             logger.error(f"Failed to fetch calendar events: {e}")
             return None
@@ -434,8 +445,17 @@ class NLPProcessor:
                 search_end = search_end + timedelta(days=attempt * 3)
 
                 # Fetch events for new window
-                search_start_utc = search_start.astimezone(datetime.timezone.utc)
-                search_end_utc = search_end.astimezone(datetime.timezone.utc)
+                if hasattr(search_start, 'tzinfo') and search_start.tzinfo is not None:
+                    search_start_utc = search_start.astimezone(datetime.timezone.utc)
+                    search_end_utc = search_end.astimezone(datetime.timezone.utc)
+                else:
+                    import pytz
+                    local_tz = pytz.timezone('Asia/Taipei')
+                    search_start = local_tz.localize(search_start)
+                    search_end = local_tz.localize(search_end)
+                    search_start_utc = search_start.astimezone(datetime.timezone.utc)
+                    search_end_utc = search_end.astimezone(datetime.timezone.utc)
+
                 existing_events = self.calendar.get_events(
                     search_start_utc.isoformat().replace('+00:00', 'Z'),
                     search_end_utc.isoformat().replace('+00:00', 'Z')
