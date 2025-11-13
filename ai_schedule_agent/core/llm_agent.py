@@ -400,19 +400,27 @@ When scheduling WITH specific time:
 {
   "action": "schedule_event",
   "event": {
-    "summary": "event title",
-    "start_time_str": "11/27 at 9pm" | "tomorrow 3pm" | "Friday 10:00",
-    "end_time_str": "11pm" | "3 hours" | "90 minutes",
-    "description": "optional",
-    "location": "optional",
+    "summary": "clear event title",
+    "start_time_str": "MUST include both date AND time. Examples: 'tomorrow 3pm', 'today 9am', 'Friday 10:00', '2025-11-27 21:00'",
+    "end_time_str": "PREFER duration format: '1 hour', '90 minutes', '3 hours'. Alternative: end time like 'tomorrow 4pm'",
+    "description": "optional details",
+    "location": "optional location or 'Online'",
     "participants": ["optional@email.com"]
   },
   "response": "I've scheduled [event] for [time]."
 }
 
+IMPORTANT RULES:
+1. start_time_str MUST have BOTH date AND time (not just "9pm" - say "today 9pm" or "tomorrow 9pm")
+2. end_time_str should be DURATION when possible ("1 hour", "2 hours", "30 minutes")
+3. If user doesn't specify duration, use "1 hour" for meetings, "30 minutes" for calls
+4. summary must be descriptive (good: "Team Meeting", bad: "Meeting")
+
 Examples:
-- "Meeting 11/27 at 9pm for 3 hrs" -> schedule_event (specific time: 9pm)
-- "Team lunch Friday at noon" -> schedule_event (specific time: noon)
+✓ "Meeting tomorrow at 2pm" -> start_time_str: "tomorrow 2pm", end_time_str: "1 hour"
+✓ "Call today 9am for 30 minutes" -> start_time_str: "today 9am", end_time_str: "30 minutes"
+✓ "Team lunch Friday noon" -> start_time_str: "Friday 12pm", end_time_str: "1 hour"
+✗ "Meeting at 2pm" -> BAD (missing date - should be "today 2pm" or "tomorrow 2pm")
 
 === CHAT (NON-SCHEDULING) ===
 {
@@ -798,28 +806,28 @@ class LLMAgent:
                     "properties": {
                         "summary": {
                             "type": "string",
-                            "description": "Event title or summary (e.g., 'Meeting with advisor', '與導師會面')"
+                            "description": "Event title or summary (e.g., 'Meeting with advisor', '與導師會面'). Must be clear and descriptive."
                         },
                         "start_time_str": {
                             "type": "string",
-                            "description": "Event start time in natural language or standard format. Examples: 'tomorrow 2pm', '明天下午2點', '2025-11-05 14:00:00', 'today at 8pm', '今天晚上8點'"
+                            "description": "Event start time with BOTH date and time. IMPORTANT: Always include the DATE (not just time). Good examples: 'tomorrow 2pm', 'today 8pm', '2025-11-15 14:00', 'next Monday 3pm'. BAD examples: '2pm' (missing date), '14:00' (missing date)."
                         },
                         "end_time_str": {
                             "type": "string",
-                            "description": "Event end time in natural language or standard format. Can be relative to start time (e.g., '3pm', '9pm', '9點') or duration-based."
+                            "description": "Event duration or end time. Prefer DURATION format for clarity. Good examples: '1 hour', '90 minutes', '2 hours', '30 mins'. Alternative: actual end time like 'tomorrow 3pm', 'today 9pm'. If user doesn't specify, use reasonable default (1 hour for meetings, 30 mins for calls)."
                         },
                         "description": {
                             "type": "string",
-                            "description": "Optional detailed description of the event"
+                            "description": "Optional detailed description or notes about the event"
                         },
                         "location": {
                             "type": "string",
-                            "description": "Optional location of the event"
+                            "description": "Optional location of the event (room, address, or 'Online' for virtual meetings)"
                         },
                         "participants": {
                             "type": "array",
                             "items": {"type": "string"},
-                            "description": "Optional list of participant email addresses"
+                            "description": "Optional list of participant email addresses or names"
                         }
                     },
                     "required": ["summary", "start_time_str", "end_time_str"]
@@ -849,21 +857,44 @@ Your capabilities:
 3. Parse relative time expressions (e.g., "tomorrow", "明天", "next Monday", "下週一")
 4. Parse specific time expressions (e.g., "2pm", "下午2點", "晚上8點")
 
-When the user wants to schedule an event:
-1. Extract the event title/summary
-2. Identify the start time (can be natural language)
-3. Identify the end time (can be natural language or relative to start)
-4. Extract any additional details (description, location, participants)
-5. Call the schedule_calendar_event function with the extracted information
+CRITICAL: When calling schedule_calendar_event function:
 
-Important notes:
-- For Chinese time expressions like "下午2點" or "晚上8點", pass them as-is to the function
-- For relative dates like "tomorrow" or "明天", pass them as-is
-- If the user doesn't specify an end time, make a reasonable assumption (e.g., 1 hour for meetings)
-- If the user doesn't specify a date, assume they mean today or the nearest logical date
-- Always be helpful and confirm what you understood before creating the event
+1. **summary**: Clear, descriptive title (required)
+   - Good: "Team Meeting with John", "Lunch with Sarah"
+   - Bad: "Meeting" (too vague)
 
-Be conversational and friendly. Confirm the details before scheduling."""
+2. **start_time_str**: MUST include BOTH date AND time (required)
+   - Good: "tomorrow 2pm", "today 8pm", "next Monday 3pm", "2025-11-15 14:00"
+   - Bad: "2pm" (missing date), "14:00" (missing date), "tomorrow" (missing time)
+   - If user only says "2pm", infer the date based on context (usually today or tomorrow)
+
+3. **end_time_str**: Prefer DURATION format (required)
+   - Best: "1 hour", "90 minutes", "2 hours", "30 mins"
+   - Alternative: Full end time like "tomorrow 3pm", "today 9pm"
+   - Default if not specified: "1 hour" for meetings, "30 minutes" for calls/quick meetings
+
+4. **description**: Additional details or notes (optional)
+5. **location**: Where the event takes place (optional)
+6. **participants**: List of email addresses or names (optional)
+
+Examples of CORRECT function calls:
+
+User: "Schedule meeting with John tomorrow at 2pm"
+→ summary: "Meeting with John"
+→ start_time_str: "tomorrow 2pm"
+→ end_time_str: "1 hour"
+
+User: "Team standup today at 9am for 30 minutes"
+→ summary: "Team standup"
+→ start_time_str: "today 9am"
+→ end_time_str: "30 minutes"
+
+User: "Coffee chat next Monday 3pm"
+→ summary: "Coffee chat"
+→ start_time_str: "next Monday 3pm"
+→ end_time_str: "1 hour"
+
+Always confirm the extracted details with the user in your response. Be conversational and friendly."""
 
         return system_message
 
