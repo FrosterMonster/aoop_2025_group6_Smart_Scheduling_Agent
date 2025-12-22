@@ -33,6 +33,23 @@ class SchedulingEngine:
         if not search_start:
             search_start = datetime.datetime.now()
 
+        # Ensure search_start is in the future (at least 1 hour from now to allow preparation)
+        now = datetime.datetime.now()
+
+        # Handle timezone-aware vs naive datetime comparison
+        if hasattr(search_start, 'tzinfo') and search_start.tzinfo is not None:
+            # search_start is timezone-aware, make now timezone-aware too
+            import pytz
+            local_tz = pytz.timezone('Asia/Taipei')
+            now = local_tz.localize(now)
+        elif hasattr(now, 'tzinfo') and now.tzinfo is not None:
+            # now is timezone-aware (shouldn't happen but just in case), make it naive
+            now = now.replace(tzinfo=None)
+
+        if search_start < now:
+            search_start = now + timedelta(hours=1)
+            logger.info(f"Adjusted search_start to future: {search_start}")
+
         # Get existing events
         search_end = search_start + timedelta(days=search_days)
 
@@ -85,6 +102,13 @@ class SchedulingEngine:
                 current_slot = start_time
                 while current_slot + timedelta(minutes=total_duration) <= end_time:
                     slot_end = current_slot + timedelta(minutes=total_duration)
+
+                    # Skip if slot is in the past (add 30 min buffer)
+                    # Use naive datetime for comparison (slots are always naive)
+                    current_time_naive = datetime.datetime.now()
+                    if current_slot < current_time_naive + timedelta(minutes=30):
+                        current_slot += timedelta(minutes=30)
+                        continue
 
                     # Check if slot is free
                     is_free = True

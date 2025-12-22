@@ -405,19 +405,30 @@ class NLPProcessor:
         search_end = search_start + timedelta(days=search_days)
 
         # Convert to UTC for Google Calendar API
+        import pytz
         if hasattr(search_start, 'tzinfo') and search_start.tzinfo is not None:
             search_start_utc = search_start.astimezone(datetime.timezone.utc)
             search_end_utc = search_end.astimezone(datetime.timezone.utc)
         else:
-            search_start_utc = search_start
-            search_end_utc = search_end
+            # Naive datetime - assume local timezone
+            local_tz = pytz.timezone('Asia/Taipei')
+            search_start = local_tz.localize(search_start)
+            search_end = local_tz.localize(search_end)
+            search_start_utc = search_start.astimezone(datetime.timezone.utc)
+            search_end_utc = search_end.astimezone(datetime.timezone.utc)
 
         # Fetch existing events
         try:
-            existing_events = self.calendar.get_events(
-                search_start_utc.isoformat().replace('+00:00', 'Z'),
-                search_end_utc.isoformat().replace('+00:00', 'Z')
-            )
+            # Ensure proper RFC3339 format with 'Z' suffix
+            time_min = search_start_utc.isoformat().replace('+00:00', 'Z')
+            time_max = search_end_utc.isoformat().replace('+00:00', 'Z')
+
+            # Validate format (should end with 'Z')
+            if not time_min.endswith('Z') or not time_max.endswith('Z'):
+                logger.error(f"Invalid timestamp format: time_min={time_min}, time_max={time_max}")
+                return None
+
+            existing_events = self.calendar.get_events(time_min, time_max)
         except Exception as e:
             logger.error(f"Failed to fetch calendar events: {e}")
             return None
@@ -434,8 +445,17 @@ class NLPProcessor:
                 search_end = search_end + timedelta(days=attempt * 3)
 
                 # Fetch events for new window
-                search_start_utc = search_start.astimezone(datetime.timezone.utc)
-                search_end_utc = search_end.astimezone(datetime.timezone.utc)
+                if hasattr(search_start, 'tzinfo') and search_start.tzinfo is not None:
+                    search_start_utc = search_start.astimezone(datetime.timezone.utc)
+                    search_end_utc = search_end.astimezone(datetime.timezone.utc)
+                else:
+                    import pytz
+                    local_tz = pytz.timezone('Asia/Taipei')
+                    search_start = local_tz.localize(search_start)
+                    search_end = local_tz.localize(search_end)
+                    search_start_utc = search_start.astimezone(datetime.timezone.utc)
+                    search_end_utc = search_end.astimezone(datetime.timezone.utc)
+
                 existing_events = self.calendar.get_events(
                     search_start_utc.isoformat().replace('+00:00', 'Z'),
                     search_end_utc.isoformat().replace('+00:00', 'Z')
@@ -662,15 +682,25 @@ REASON: Free slot in afternoon, no conflicts, good spacing"""
         start_time_str = data.get('start_time_str')
         end_time_str = data.get('end_time_str')
 
+        # Parse start time
         if start_time_str:
+            logger.debug(f"Parsing start_time_str: '{start_time_str}'")
             start_time = parse_nl_time(start_time_str, prefer_future=True)
             if not start_time:
                 # Fallback to dateparser
                 start_time = dateparser.parse(start_time_str, settings={'PREFER_DATES_FROM': 'future'})
 
+            if start_time:
+                logger.info(f"Successfully parsed start time: {start_time}")
+            else:
+                logger.warning(f"Failed to parse start_time_str: '{start_time_str}'")
+        else:
+            logger.warning("No start_time_str provided by LLM")
+
         # Check if end_time_str is a duration string or an actual end time
         duration = None
         if end_time_str:
+            logger.debug(f"Parsing end_time_str: '{end_time_str}'")
             # Try to parse as duration first (e.g., "3 hours", "90 minutes", "2 hrs")
             from ai_schedule_agent.utils.time_parser import parse_duration
             duration_td = parse_duration(end_time_str)
@@ -678,11 +708,13 @@ REASON: Free slot in afternoon, no conflicts, good spacing"""
             if duration_td:
                 # It's a duration string
                 duration = int(duration_td.total_seconds() / 60)  # Convert to minutes
-                logger.debug(f"Parsed duration from end_time_str: {duration} minutes")
+                logger.info(f"Parsed duration: {duration} minutes from '{end_time_str}'")
 
                 # Calculate end_time from start_time + duration
                 if start_time:
                     end_time = start_time + duration_td
+                else:
+                    logger.warning("Cannot calculate end_time: start_time is None")
             else:
                 # Not a duration, try to parse as actual end time
                 end_time = parse_nl_time(end_time_str, prefer_future=True)
@@ -693,7 +725,22 @@ REASON: Free slot in afternoon, no conflicts, good spacing"""
                 # Calculate duration if both times available
                 if start_time and end_time:
                     duration = int((end_time - start_time).total_seconds() / 60)  # minutes
-                    logger.debug(f"Calculated duration from time difference: {duration} minutes")
+                    logger.info(f"Calculated duration: {duration} minutes from time difference")
+                else:
+                    logger.warning(f"Failed to parse end_time_str as time: '{end_time_str}'")
+        else:
+            # No end time provided, default to 1 hour
+            logger.warning("No end_time_str provided by LLM, defaulting to 1 hour")
+            duration = 60
+            if start_time:
+                from datetime import timedelta
+                end_time = start_time + timedelta(minutes=60)
+
+        # Ensure we have at least duration if parsing failed
+        if duration is None and start_time and end_time:
+            duration = int((end_time - start_time).total_seconds() / 60)
+        elif duration is None:
+            duration = 60  # Default fallback
 
         result = {
             'action': 'create',
@@ -702,14 +749,14 @@ REASON: Free slot in afternoon, no conflicts, good spacing"""
             'datetime': start_time,
             'end_datetime': end_time,  # Add end datetime explicitly
             'duration': duration,
-            'location': data.get('location'),
+            'location': data.get('location', ''),
             'title': data.get('summary', 'New Event'),
-            'description': data.get('description'),
+            'description': data.get('description', ''),
             'llm_mode': True,
-            'llm_response': llm_result.get('response')  # Keep LLM's response for user feedback
+            'llm_response': llm_result.get('response', '')  # Keep LLM's response for user feedback
         }
 
-        logger.info(f"Converted LLM result: {result}")
+        logger.info(f"Converted LLM result: title='{result['title']}', datetime={result['datetime']}, duration={result['duration']}min")
         return result
 
     def reset_conversation(self):
