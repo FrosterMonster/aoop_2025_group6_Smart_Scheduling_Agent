@@ -57,3 +57,11 @@ logs/
 .state/
 app_state.json
 *_state.json
+
+# Archived 阿嚕米
+阿嚕米_archived/*.pyc
+阿嚕米_archived/__pycache__/
+阿嚕米_archived/.env
+阿嚕米_archived/token.pickle
+阿嚕米_archived/credentials.json
+!阿嚕米_archived/DEPRECATED.md
