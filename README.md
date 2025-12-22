@@ -2,6 +2,18 @@
 
 > Intelligent Personal Scheduling Assistant with Google Calendar integration and AI-powered pattern learning.
 
+---
+
+## 🚨 **Got Python 3.13 Error? → [ONE-COMMAND FIX](QUICK_START.md#-got-the-cant-find-a-usable-inittcl-error)**
+
+```bash
+./fix_python313.sh  # Automatically fixes Python 3.13 Tkinter issues
+```
+
+See **[QUICK_START.md](QUICK_START.md)** for the fastest way to get running!
+
+---
+
 ## ✨ Features
 
 - 🗣️ **Natural Language Processing** - Schedule events using plain English
@@ -147,12 +159,26 @@ python test_tkinter.py
 ```
 
 **IMPORTANT**: If you get "Can't find a usable init.tcl" or "Tcl isn't installed" error:
+
+⚡ **QUICK FIX** (Automated - Recommended):
+```bash
+./fix_python313.sh
+```
+This script automatically fixes Python 3.13 issues!
+
+📋 **Manual Fix**:
 1. **Most likely cause**: You're using Python 3.13 on Windows
 2. **Solution**: Install Python 3.12.7 instead
 3. Delete the venv folder: `rm -rf venv` (or `rmdir /s venv` on Windows CMD)
 4. Run `./venv_setup.sh` again (will auto-detect Python 3.12)
 
+🔍 **Check Your Setup**:
+```bash
+./check_python.sh  # Diagnose Python issues
+```
+
 **Troubleshooting Guides**:
+- [FIX_PYTHON_313_TKINTER_ERROR.md](FIX_PYTHON_313_TKINTER_ERROR.md) - Quick fix guide
 - [PYTHON_VERSION_GUIDE.md](PYTHON_VERSION_GUIDE.md) - Python version issues
 - [TKINTER_INSTALLATION.md](docs/guides/TKINTER_INSTALLATION.md) - Tkinter installation
 

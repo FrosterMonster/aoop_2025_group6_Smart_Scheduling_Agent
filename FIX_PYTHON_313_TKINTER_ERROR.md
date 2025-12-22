@@ -13,7 +13,27 @@ This probably means that Tcl wasn't installed properly.
 
 You're experiencing a **known issue with Python 3.13 on Windows**. The Tkinter/Tcl libraries don't work properly even when Python is correctly installed.
 
-## Quick Fix (Recommended)
+## ⚡ SUPER EASY FIX (Automated)
+
+**Just run this ONE command:**
+
+```bash
+./fix_python313.sh
+```
+
+This automated script will:
+- ✅ Detect your Python versions
+- ✅ Find or guide you to install Python 3.12
+- ✅ Backup your old virtual environment
+- ✅ Create a new venv with Python 3.12
+- ✅ Install all dependencies
+- ✅ Verify everything works
+
+**That's it!** The script handles everything automatically.
+
+---
+
+## Manual Fix (If You Prefer)
 
 ### Step 1: Install Python 3.12.7
 
@@ -94,6 +114,22 @@ The following improvements have been made to prevent this issue:
 - **[PYTHON_VERSION_GUIDE.md](PYTHON_VERSION_GUIDE.md)** - Comprehensive Python version guide
 - **README.md** updated with Python 3.13 warnings
 - This fix guide (FIX_PYTHON_313_TKINTER_ERROR.md)
+
+---
+
+## Quick Diagnostics
+
+To check your Python setup anytime:
+
+```bash
+./check_python.sh
+```
+
+This shows:
+- All Python installations on your system
+- Which versions have Tkinter
+- Your virtual environment status
+- Specific recommendations
 
 ---
 
