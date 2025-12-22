@@ -16,11 +16,18 @@
 
 ### 1. Setup (One Command)
 
+**IMPORTANT**: Before running setup, ensure tkinter is installed on your system Python:
+```bash
+python -m tkinter  # Should show a test window
+```
+
+If not installed, see [Prerequisites](#-installing-prerequisites) below first.
+
 ```bash
 ./venv_setup.sh
 ```
 
-This installs dependencies, downloads NLP models, and creates config files.
+This installs dependencies, downloads NLP models, and creates config files. The virtual environment will automatically inherit tkinter from your system Python.
 
 ### 2. Configure API Keys
 
@@ -126,14 +133,19 @@ brew install python@3.12  # Includes tkinter
 #### Windows
 - Download Python from [python.org](https://www.python.org/downloads/)
 - During installation, ensure "tcl/tk and IDLE" is checked
-- tkinter is included by default
+- If already installed, repair: Settings → Apps → Python → Modify → Ensure "tcl/tk and IDLE" is checked
 
 #### Verify Installation
 ```bash
-python3 -m tkinter  # Should show a test window
+python -m tkinter  # Should show a test window
 # OR
 python test_tkinter.py
 ```
+
+**IMPORTANT**: If you get "Tcl isn't installed" error after running `venv_setup.sh`:
+1. Install/repair tkinter on your system Python (see above)
+2. Delete the venv folder: `rm -rf venv` (or `rmdir /s venv` on Windows CMD)
+3. Run `./venv_setup.sh` again to recreate the venv with tkinter access
 
 **Troubleshooting**: If you see "No module named 'tkinter'", see [TKINTER_INSTALLATION.md](docs/guides/TKINTER_INSTALLATION.md)
 

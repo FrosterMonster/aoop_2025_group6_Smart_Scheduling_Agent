@@ -175,8 +175,9 @@ fi
 # Create new venv only if needed
 if [ "$VENV_EXISTS" = false ]; then
     print_info "Creating new virtual environment..."
-    print_detail "Running: $PYTHON_CMD -m venv venv"
-    $PYTHON_CMD -m venv venv
+    print_detail "Running: $PYTHON_CMD -m venv venv --system-site-packages"
+    print_detail "Using --system-site-packages to inherit tkinter from system Python"
+    $PYTHON_CMD -m venv venv --system-site-packages
 
     if [ ! -d "venv" ]; then
         print_error "Failed to create virtual environment"
@@ -392,13 +393,15 @@ echo ""
 echo "Step 8: Verifying installation..."
 print_detail "Running final checks..."
 
-# Check tkinter again (in case it was installed during setup)
-print_detail "Checking tkinter availability..."
-if $PYTHON_CMD -c "import tkinter" 2>/dev/null; then
-    TKINTER_VERSION=$($PYTHON_CMD -c "import tkinter; print(tkinter.TkVersion)" 2>/dev/null)
-    print_detail "  ✓ tkinter ($TKINTER_VERSION)"
+# Check tkinter again (in venv - the actual environment used by the app)
+print_detail "Checking tkinter availability in virtual environment..."
+if $VENV_PYTHON -c "import tkinter" 2>/dev/null; then
+    TKINTER_VERSION=$($VENV_PYTHON -c "import tkinter; print(tkinter.TkVersion)" 2>/dev/null)
+    print_detail "  ✓ tkinter ($TKINTER_VERSION) - accessible in venv"
 else
-    print_detail "  ✗ tkinter (NOT INSTALLED - GUI will not work!)"
+    print_detail "  ✗ tkinter (NOT ACCESSIBLE IN VENV - GUI will not work!)"
+    print_warning "Virtual environment cannot access system tkinter"
+    print_info "This usually means system Python doesn't have tkinter installed"
 fi
 
 print_detail "Checking key Python packages:"
@@ -429,15 +432,29 @@ print_success "Python environment is ready"
 print_success "Configuration files created"
 print_success ".env file initialized"
 
-# Check tkinter one more time for final summary
-if ! $PYTHON_CMD -c "import tkinter" 2>/dev/null; then
+# Check tkinter one more time for final summary (using venv Python)
+if ! $VENV_PYTHON -c "import tkinter" 2>/dev/null; then
     echo ""
-    print_error "CRITICAL: tkinter is NOT installed!"
+    print_error "CRITICAL: tkinter is NOT accessible in the virtual environment!"
     print_warning "The application GUI will NOT work without tkinter"
-    print_info "Install tkinter before running the app:"
+    print_info "To fix this issue:"
+    echo ""
+    echo "  1. Install tkinter on your SYSTEM Python first:"
+    if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+        echo "     sudo apt-get install python3-tk"
+    elif [[ "$OSTYPE" == "darwin"* ]]; then
+        echo "     brew install python-tk"
+    elif [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" ]]; then
+        echo "     Repair Python: Settings → Apps → Python → Modify"
+        echo "     Ensure 'tcl/tk and IDLE' is checked"
+    fi
+    echo ""
+    echo "  2. Recreate the virtual environment:"
+    echo "     rm -rf venv"
+    echo "     ./venv_setup.sh"
+    echo ""
     echo "  See: docs/guides/TKINTER_INSTALLATION.md"
-    echo "  Test: python3 -m tkinter"
-    echo "  Quick test: python test_tkinter.py"
+    echo "  Test after install: python3 -m tkinter"
 fi
 
 echo ""
