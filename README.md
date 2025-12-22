@@ -106,11 +106,14 @@ USE_MODERN_UI=false ./run.sh
 
 ## 🛠️ System Requirements
 
-- **Python**: 3.9, 3.10, 3.11, 3.12, or 3.13 (3.11/3.12 recommended)
+- **Python**: 3.9 - 3.12 (**3.12.7 recommended** - avoid 3.13 on Windows)
 - **OS**: Windows, Linux, or macOS
 - **GUI Library**: tkinter (see installation below)
 - **Google Account**: For Calendar integration
 - **API Key**: Claude (Anthropic), OpenAI, or Gemini
+
+⚠️ **Important**: Python 3.13 has known Tkinter issues on Windows. Use Python 3.12.7 instead.
+See [PYTHON_VERSION_GUIDE.md](PYTHON_VERSION_GUIDE.md) for details.
 
 ### 📦 Installing Prerequisites
 
@@ -131,8 +134,9 @@ brew install python@3.12  # Includes tkinter
 ```
 
 #### Windows
-- Download Python from [python.org](https://www.python.org/downloads/)
+- **Download Python 3.12.7** (recommended): https://www.python.org/downloads/release/python-3127/
 - During installation, ensure "tcl/tk and IDLE" is checked
+- **Avoid Python 3.13** - has known Tkinter compatibility issues
 - If already installed, repair: Settings → Apps → Python → Modify → Ensure "tcl/tk and IDLE" is checked
 
 #### Verify Installation
@@ -142,12 +146,15 @@ python -m tkinter  # Should show a test window
 python test_tkinter.py
 ```
 
-**IMPORTANT**: If you get "Tcl isn't installed" error after running `venv_setup.sh`:
-1. Install/repair tkinter on your system Python (see above)
-2. Delete the venv folder: `rm -rf venv` (or `rmdir /s venv` on Windows CMD)
-3. Run `./venv_setup.sh` again to recreate the venv with tkinter access
+**IMPORTANT**: If you get "Can't find a usable init.tcl" or "Tcl isn't installed" error:
+1. **Most likely cause**: You're using Python 3.13 on Windows
+2. **Solution**: Install Python 3.12.7 instead
+3. Delete the venv folder: `rm -rf venv` (or `rmdir /s venv` on Windows CMD)
+4. Run `./venv_setup.sh` again (will auto-detect Python 3.12)
 
-**Troubleshooting**: If you see "No module named 'tkinter'", see [TKINTER_INSTALLATION.md](docs/guides/TKINTER_INSTALLATION.md)
+**Troubleshooting Guides**:
+- [PYTHON_VERSION_GUIDE.md](PYTHON_VERSION_GUIDE.md) - Python version issues
+- [TKINTER_INSTALLATION.md](docs/guides/TKINTER_INSTALLATION.md) - Tkinter installation
 
 ## 📦 Project Structure
 
