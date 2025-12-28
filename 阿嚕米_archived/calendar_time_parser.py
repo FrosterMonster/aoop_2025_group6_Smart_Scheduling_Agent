@@ -106,11 +106,6 @@ def _rule_based_fallback(nl_text: str) -> Dict[str, Any]:
     # --- duration 解析（小時） ---
     duration = 60  # 預設 1 小時
 
-    # 中文數字先轉成阿拉伯數字（兩小時 → 2小時）
-    for zh, num in CHINESE_NUM_MAP.items():
-        nl_text = nl_text.replace(f"{zh}小時", f"{num}小時")
-
-    duration_match = re.search(r'(\d+)\s*小時', nl_text)
     if duration_match:
         duration = int(duration_match.group(1)) * 60
     title = re.sub(
