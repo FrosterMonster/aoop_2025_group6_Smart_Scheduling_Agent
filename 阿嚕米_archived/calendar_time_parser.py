@@ -11,7 +11,7 @@ genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 def parse_with_ai(nl_time_str: str):
     """使用 Gemini 解析意圖並回傳 JSON"""
     try:
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        model = genai.GenerativeModel('gemini-flash-latest')
         prompt = f"""
         現在日期時間：{datetime.now().strftime('%Y-%m-%d %H:%M')}
         使用者指令："{nl_time_str}"
