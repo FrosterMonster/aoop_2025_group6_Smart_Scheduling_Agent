@@ -83,64 +83,190 @@ class QuickScheduleTab:
         form_frame = tk.Frame(form_card.body, bg=EnterpriseTheme.BACKGROUND['card'])
         form_frame.pack(fill='both', expand=True)
 
-        # Event details
-        fields = [
-            ("Title:", "title"),
-            ("Description:", "description"),
-            ("Location:", "location"),
-            ("Participants (comma-separated):", "participants"),
-            ("Date (YYYY-MM-DD):", "date"),
-            ("Start Time (HH:MM):", "start_time"),
-            ("Duration (minutes):", "duration"),
-            ("Prep Time (minutes):", "prep_time"),
-            ("Follow-up Time (minutes):", "followup_time")
-        ]
-
         self.form_entries = {}
-        for i, (label, field) in enumerate(fields):
-            ttk.Label(form_frame, text=label).grid(row=i, column=0, sticky='e', padx=5, pady=3)
-            entry = ttk.Entry(form_frame, width=40)
-            entry.grid(row=i, column=1, padx=5, pady=3)
-            self.form_entries[field] = entry
 
-        # Event type dropdown
-        ttk.Label(form_frame, text="Event Type:").grid(row=len(fields), column=0, sticky='e', padx=5, pady=3)
+        # Title (full width)
+        title_input_frame, title_label, title_entry = EnterpriseTheme.create_input_frame(
+            form_frame, "Event Title"
+        )
+        title_input_frame.pack(fill='x', pady=(0, 12))
+        self.form_entries['title'] = title_entry
+
+        # Description (full width)
+        desc_input_frame, desc_label, desc_entry = EnterpriseTheme.create_input_frame(
+            form_frame, "Description"
+        )
+        desc_input_frame.pack(fill='x', pady=(0, 12))
+        self.form_entries['description'] = desc_entry
+
+        # Location (full width)
+        loc_input_frame, loc_label, loc_entry = EnterpriseTheme.create_input_frame(
+            form_frame, "Location"
+        )
+        loc_input_frame.pack(fill='x', pady=(0, 12))
+        self.form_entries['location'] = loc_entry
+
+        # Date and Time (side by side)
+        datetime_row = tk.Frame(form_frame, bg=EnterpriseTheme.BACKGROUND['card'])
+        datetime_row.pack(fill='x', pady=(0, 12))
+
+        # Date (half width)
+        date_col = tk.Frame(datetime_row, bg=EnterpriseTheme.BACKGROUND['card'])
+        date_col.pack(side='left', fill='x', expand=True, padx=(0, 8))
+        date_input_frame, date_label, date_entry = EnterpriseTheme.create_input_frame(
+            date_col, "Date"
+        )
+        date_input_frame.pack(fill='x')
+        self.form_entries['date'] = date_entry
+
+        # Time (half width)
+        time_col = tk.Frame(datetime_row, bg=EnterpriseTheme.BACKGROUND['card'])
+        time_col.pack(side='left', fill='x', expand=True, padx=(8, 0))
+        time_input_frame, time_label, time_entry = EnterpriseTheme.create_input_frame(
+            time_col, "Time"
+        )
+        time_input_frame.pack(fill='x')
+        self.form_entries['start_time'] = time_entry
+
+        # Duration, Prep Time, Follow-up Time (three columns)
+        duration_row = tk.Frame(form_frame, bg=EnterpriseTheme.BACKGROUND['card'])
+        duration_row.pack(fill='x', pady=(0, 12))
+
+        # Duration
+        dur_col = tk.Frame(duration_row, bg=EnterpriseTheme.BACKGROUND['card'])
+        dur_col.pack(side='left', fill='x', expand=True, padx=(0, 8))
+        dur_input_frame, dur_label, dur_entry = EnterpriseTheme.create_input_frame(
+            dur_col, "Duration (min)"
+        )
+        dur_input_frame.pack(fill='x')
+        self.form_entries['duration'] = dur_entry
+
+        # Prep Time
+        prep_col = tk.Frame(duration_row, bg=EnterpriseTheme.BACKGROUND['card'])
+        prep_col.pack(side='left', fill='x', expand=True, padx=(8, 8))
+        prep_input_frame, prep_label, prep_entry = EnterpriseTheme.create_input_frame(
+            prep_col, "Prep (min)"
+        )
+        prep_input_frame.pack(fill='x')
+        self.form_entries['prep_time'] = prep_entry
+
+        # Follow-up Time
+        followup_col = tk.Frame(duration_row, bg=EnterpriseTheme.BACKGROUND['card'])
+        followup_col.pack(side='left', fill='x', expand=True, padx=(8, 0))
+        followup_input_frame, followup_label, followup_entry = EnterpriseTheme.create_input_frame(
+            followup_col, "Follow-up (min)"
+        )
+        followup_input_frame.pack(fill='x')
+        self.form_entries['followup_time'] = followup_entry
+
+        # Event Type and Priority (side by side)
+        type_priority_row = tk.Frame(form_frame, bg=EnterpriseTheme.BACKGROUND['card'])
+        type_priority_row.pack(fill='x', pady=(0, 12))
+
+        # Event Type (half width)
+        type_col = tk.Frame(type_priority_row, bg=EnterpriseTheme.BACKGROUND['card'])
+        type_col.pack(side='left', fill='x', expand=True, padx=(0, 8))
+
+        type_label = tk.Label(
+            type_col,
+            text="Event Type",
+            bg=EnterpriseTheme.BACKGROUND['card'],
+            fg=EnterpriseTheme.TEXT['secondary'],
+            font=(EnterpriseTheme.get_font_family(), EnterpriseTheme.TYPE_SCALE['small'], 'normal'),
+            anchor='w'
+        )
+        type_label.pack(fill='x', pady=(0, 4))
+
         self.event_type_var = tk.StringVar(value=EventType.MEETING.value)
-        event_type_dropdown = ttk.Combobox(form_frame, textvariable=self.event_type_var,
-                                          values=[e.value for e in EventType], state='readonly')
-        event_type_dropdown.grid(row=len(fields), column=1, padx=5, pady=3, sticky='w')
+        event_type_dropdown = ttk.Combobox(
+            type_col,
+            textvariable=self.event_type_var,
+            values=[e.value for e in EventType],
+            state='readonly',
+            style='Enterprise.TCombobox'
+        )
+        event_type_dropdown.pack(fill='x')
 
-        # Priority dropdown
-        ttk.Label(form_frame, text="Priority:").grid(row=len(fields)+1, column=0, sticky='e', padx=5, pady=3)
+        # Priority (half width)
+        priority_col = tk.Frame(type_priority_row, bg=EnterpriseTheme.BACKGROUND['card'])
+        priority_col.pack(side='left', fill='x', expand=True, padx=(8, 0))
+
+        priority_label = tk.Label(
+            priority_col,
+            text="Priority",
+            bg=EnterpriseTheme.BACKGROUND['card'],
+            fg=EnterpriseTheme.TEXT['secondary'],
+            font=(EnterpriseTheme.get_font_family(), EnterpriseTheme.TYPE_SCALE['small'], 'normal'),
+            anchor='w'
+        )
+        priority_label.pack(fill='x', pady=(0, 4))
+
         self.priority_var = tk.StringVar(value="MEDIUM")
-        priority_dropdown = ttk.Combobox(form_frame, textvariable=self.priority_var,
-                                        values=[p.name for p in Priority], state='readonly')
-        priority_dropdown.grid(row=len(fields)+1, column=1, padx=5, pady=3, sticky='w')
+        priority_dropdown = ttk.Combobox(
+            priority_col,
+            textvariable=self.priority_var,
+            values=[p.name for p in Priority],
+            state='readonly',
+            style='Enterprise.TCombobox'
+        )
+        priority_dropdown.pack(fill='x')
+
+        # Participants (full width)
+        participants_input_frame, participants_label, participants_entry = EnterpriseTheme.create_input_frame(
+            form_frame, "Participants (comma-separated)"
+        )
+        participants_input_frame.pack(fill='x', pady=(0, 12))
+        self.form_entries['participants'] = participants_entry
+
+        # Tags (full width)
+        tags_input_frame, tags_label, tags_entry = EnterpriseTheme.create_input_frame(
+            form_frame, "Tags (comma-separated)"
+        )
+        tags_input_frame.pack(fill='x', pady=(0, 12))
+        self.tags_entry = tags_entry
 
         # Flexible checkbox
         self.is_flexible_var = tk.BooleanVar(value=True)
-        ttk.Checkbutton(form_frame, text="Flexible timing",
-                       variable=self.is_flexible_var).grid(row=len(fields)+2, column=1, sticky='w', pady=3)
-
-        # Tags entry
-        ttk.Label(form_frame, text="Tags (comma-separated):").grid(row=len(fields)+3, column=0, sticky='e', padx=5, pady=3)
-        self.tags_entry = ttk.Entry(form_frame, width=40)
-        self.tags_entry.grid(row=len(fields)+3, column=1, padx=5, pady=3)
+        flexible_check = ttk.Checkbutton(
+            form_frame,
+            text="Flexible timing",
+            variable=self.is_flexible_var,
+            style='Enterprise.TCheckbutton'
+        )
+        flexible_check.pack(anchor='w', pady=(0, 16))
 
         # Submit and Clear buttons
         button_frame = tk.Frame(form_frame, bg=EnterpriseTheme.BACKGROUND['card'])
-        button_frame.grid(row=len(fields)+4, column=0, columnspan=2, pady=20)
+        button_frame.pack(fill='x')
 
-        self.schedule_btn = ttk.Button(button_frame, text="✅ Add to Calendar",
-                                       command=self.schedule_event_from_form, style='Accent.TButton')
-        self.schedule_btn.pack(side='left', padx=5)
+        self.schedule_btn = EnterpriseTheme.create_button(
+            button_frame,
+            "Create Event",
+            variant='primary',
+            command=self.schedule_event_from_form
+        )
+        self.schedule_btn.pack(side='right')
         # Start disabled until required fields (Title) are present
         try:
             self.schedule_btn.state(['disabled'])
         except Exception:
             pass
-        ttk.Button(button_frame, text="Clear Form",
-                  command=self.clear_form).pack(side='left', padx=5)
+
+        cancel_btn = EnterpriseTheme.create_button(
+            button_frame,
+            "Cancel",
+            variant='secondary',
+            command=self.clear_form
+        )
+        cancel_btn.pack(side='right', padx=(0, 8))
+
+        draft_btn = EnterpriseTheme.create_button(
+            button_frame,
+            "Save as Draft",
+            variant='ghost',
+            command=self.clear_form
+        )
+        draft_btn.pack(side='right', padx=(0, 8))
 
         # === CARD 3: Result Display ===
         result_card = FluentCard(main_container, title="AI Response", padding=20)
