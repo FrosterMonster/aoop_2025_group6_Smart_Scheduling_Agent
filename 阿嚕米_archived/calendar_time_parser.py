@@ -278,6 +278,17 @@ def _post_process_and_validate(raw: Dict[str, Any], nl_text: str) -> List[Dict[s
 
         title = title.strip()
 
+        # ---------- 活動本體最終抽取（教科書級） ----------
+
+        COMMON_ACTIVITIES = [
+            "讀書", "看書", "運動", "跑步", "打球", "吃飯",
+            "開會", "會議", "寫作", "寫報告", "看電影", "休息"
+        ]
+
+        for act in COMMON_ACTIVITIES:
+            if act in title:
+                title = act
+                break
 
         # 如果清完只剩一個動詞或空白，保底
         if not title:
@@ -293,6 +304,7 @@ def _post_process_and_validate(raw: Dict[str, Any], nl_text: str) -> List[Dict[s
             "幫我找",
             "安排",
             "幫我安排",
+            "找",
         ]
 
         for prefix in SCHEDULING_PREFIXES:
