@@ -80,7 +80,11 @@ def _rule_based_fallback(nl_text: str) -> Dict[str, Any]:
     return {
         "events": [
             {
-                "title": nl_text.split()[0],
+                "title": re.sub(
+                    r"(明天|今天|後天|早上|下午|晚上|上午|中午|凌晨|\d+點|\d+:\d+)", 
+                    "",
+                    nl_text
+                ).strip(),
                 "date": date.strftime("%Y-%m-%d"),
                 "start_time": start_time,
                 "duration": 60,
@@ -155,7 +159,12 @@ def _post_process_and_validate(raw: Dict[str, Any], nl_text: str) -> List[Dict[s
     results = []
 
     for ev in raw["events"]:
-        title = ev.get("title") or nl_text.split()[0]
+        raw_title = ev.get("title") or nl_text
+        title = re.sub(
+            r"(明天|今天|後天|早上|下午|晚上|上午|中午|凌晨|\d+點|\d+:\d+)",
+            "",
+            raw_title
+        ).strip()
 
         # 日期
         date_str = ev.get("date")
