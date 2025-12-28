@@ -20,6 +20,21 @@ MODEL_NAME = "models/gemini-flash-latest"
 TZ = "Asia/Taipei"
 
 
+CHINESE_NUM_MAP = {
+    "零": 0,
+    "一": 1,
+    "二": 2,
+    "兩": 2,
+    "三": 3,
+    "四": 4,
+    "五": 5,
+    "六": 6,
+    "七": 7,
+    "八": 8,
+    "九": 9,
+    "十": 10,
+}
+
 # ---------- 公開介面 ----------
 def parse_with_ai(nl_text: str) -> Dict[str, Any]:
     """
@@ -46,6 +61,9 @@ def parse_with_ai(nl_text: str) -> Dict[str, Any]:
 
 
 def _rule_based_fallback(nl_text: str) -> Dict[str, Any]:
+
+    text = nl_text  # 用副本，不污染原始輸入
+
     """
     AI quota / error 時的最小可用 parser
     """
@@ -59,8 +77,16 @@ def _rule_based_fallback(nl_text: str) -> Dict[str, Any]:
     start_time = None
     is_flexible = True
 
-    # 只抓「X點 / X:MM」
-    time_match = re.search(r'(\d{1,2})\s*(?:點|:)(\d{1,2})?', nl_text)
+    for zh, num in CHINESE_NUM_MAP.items():
+        text = text.replace(f"{zh}點", f"{num}點")
+
+    for zh, num in CHINESE_NUM_MAP.items():
+        text = text.replace(f"{zh}小時", f"{num}小時")
+
+    time_match = re.search(r'(\d{1,2})\s*(?:點|:)(\d{1,2})?', text)
+    duration_match = re.search(r'(\d+)\s*小時', text)
+
+    
     if time_match:
         hour = int(time_match.group(1))
         minute = int(time_match.group(2) or 0)
@@ -77,17 +103,32 @@ def _rule_based_fallback(nl_text: str) -> Dict[str, Any]:
         start_time = f"{hour:02d}:{minute:02d}"
         is_flexible = False
 
+    # --- duration 解析（小時） ---
+    duration = 60  # 預設 1 小時
+
+    # 中文數字先轉成阿拉伯數字（兩小時 → 2小時）
+    for zh, num in CHINESE_NUM_MAP.items():
+        nl_text = nl_text.replace(f"{zh}小時", f"{num}小時")
+
+    duration_match = re.search(r'(\d+)\s*小時', nl_text)
+    if duration_match:
+        duration = int(duration_match.group(1)) * 60
+    title = re.sub(
+        r"(明天|今天|後天|早上|下午|晚上|上午|中午|凌晨|"
+        r"\d+點|\d+:\d+|"
+        r"[一二兩三四五六七八九十\d]+小時)",
+        "",
+        nl_text
+    )
+    title = re.sub(r"(有|的)", "", title).strip()
+
     return {
         "events": [
             {
-                "title": re.sub(
-                    r"(明天|今天|後天|早上|下午|晚上|上午|中午|凌晨|\d+點|\d+:\d+)", 
-                    "",
-                    nl_text
-                ).strip(),
+                "title": title,
                 "date": date.strftime("%Y-%m-%d"),
                 "start_time": start_time,
-                "duration": 60,
+                "duration": duration,
                 "is_flexible": is_flexible,
                 "is_recurring": False,
                 "recurrence": None
@@ -159,12 +200,21 @@ def _post_process_and_validate(raw: Dict[str, Any], nl_text: str) -> List[Dict[s
     results = []
 
     for ev in raw["events"]:
+        fallback_event = _rule_based_fallback(nl_text)["events"][0]
+
         raw_title = ev.get("title") or nl_text
+
+        # ① 移除時間相關詞
         title = re.sub(
-            r"(明天|今天|後天|早上|下午|晚上|上午|中午|凌晨|\d+點|\d+:\d+)",
+            r"(明天|今天|後天|本週|下週|早上|下午|晚上|上午|中午|凌晨|"
+            r"\d+點|\d+:\d+|"
+            r"[一二兩三四五六七八九十\d]+小時)",
             "",
             raw_title
-        ).strip()
+        )
+
+        # ② 移除結構詞，只保留事件核心
+        title = re.sub(r"(有|的)", "", title).strip()
 
         # 日期
         date_str = ev.get("date")
@@ -175,17 +225,24 @@ def _post_process_and_validate(raw: Dict[str, Any], nl_text: str) -> List[Dict[s
         # 時間
         start_time = ev.get("start_time")
 
-        # AI 沒抓到時間，但文字裡有時間 → 用 rule-based 補
+        # ---------- 時間補強 ----------
+        # AI 沒抓到時間，但文字裡有 → 用 fallback 補
         if not start_time:
-            fallback = _rule_based_fallback(nl_text)
-            fb_event = fallback["events"][0]
-            start_time = fb_event.get("start_time")
+            start_time = fallback_event.get("start_time")
 
         has_explicit_time = start_time not in (None, "", "null")
         is_flexible = not has_explicit_time
 
-        # 時長
-        duration = int(ev.get("duration") or 60)
+        # ---------- 時長補強 ----------
+        # AI 給的 duration
+        duration = ev.get("duration")
+
+        # AI 沒抓到 duration，但文字裡有「小時」 → 用 fallback 補
+        if not duration and "小時" in nl_text:
+            duration = fallback_event.get("duration")
+
+        # 最後防呆
+        duration = int(duration or 60)
 
         # recurrence
         recurrence = ev.get("recurrence")
