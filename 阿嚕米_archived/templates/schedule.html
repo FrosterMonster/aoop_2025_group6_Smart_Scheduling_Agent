@@ -10,6 +10,7 @@
         .hero-card { background: var(--primary-gradient); color: white; border: none; border-radius: 20px; box-shadow: 0 10px 20px rgba(37,117,252,0.2); }
         .form-card { border-radius: 20px; box-shadow: 0 15px 35px rgba(0,0,0,0.1); border: none; padding: 30px; }
         .btn-parse { background-color: #ffd700; color: #333; font-weight: bold; border: none; }
+        .btn-parse:hover { background-color: #ffc107; }
     </style>
 </head>
 <body>
@@ -20,8 +21,8 @@
                 <h2>📅 AI 智能全日曆助手</h2>
                 <p class="opacity-75">跨日曆衝突偵測，自動為您尋找最佳時段</p>
                 <div class="input-group mt-3">
-                    <input type="text" id="nl_input" class="form-control form-control-lg border-0" placeholder="例如：明天找有空的時間運動一小時...">
-                    <button class="btn btn-parse px-4" onclick="processAI()" id="ai_btn">開始解析</button>
+                    <input type="text" id="nl_input" class="form-control form-control-lg border-0" placeholder="例如：明天早上五點運動一小時...">
+                    <button class="btn btn-parse px-4" type="button" onclick="processAI()" id="ai_btn">開始解析指令</button>
                 </div>
             </div>
 
@@ -33,7 +34,7 @@
                 <div class="alert alert-danger">{{ error }}</div>
                 {% endif %}
 
-                <form action="/schedule" method="POST">
+                <form action="/schedule" method="POST" id="main_form">
                     <input type="hidden" name="is_flexible" id="is_flexible_field" value="false">
                     
                     <div class="mb-3">
@@ -51,7 +52,7 @@
                             <input type="time" name="start_time" id="start_time_field" class="form-control">
                         </div>
                         <div class="col-md-4 mb-3">
-                            <label class="form-label">持續時數</label>
+                            <label class="form-label">持續時數 (小時)</label>
                             <input type="number" step="0.5" name="hours" id="hours_field" class="form-control" value="1.0">
                         </div>
                     </div>
@@ -66,7 +67,7 @@
                     </div>
 
                     <div id="ai_suggestion" class="alert alert-light border d-none"></div>
-                    <button type="submit" class="btn btn-primary w-100 btn-lg shadow">確認新增至日曆</button>
+                    <button type="submit" class="btn btn-primary w-100 btn-lg shadow">確認新增至 Google 日曆</button>
                 </form>
             </div>
         </div>
@@ -79,8 +80,9 @@ async function processAI() {
     const btn = document.getElementById('ai_btn');
     if(!text) return;
 
+    // 進入讀取狀態
     btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 思考中...';
 
     try {
         const response = await fetch('/api/parse_nl', {
@@ -90,29 +92,36 @@ async function processAI() {
         });
         const data = await response.json();
 
+        if (data.error) {
+            alert("解析失敗: " + data.error);
+            return;
+        }
+
         // 填入資料
         document.getElementById('summary_field').value = data.title || "";
         document.getElementById('date_field').value = data.date || ""; 
         document.getElementById('hours_field').value = data.duration ? (data.duration/60).toFixed(1) : 1.0;
         document.getElementById('start_time_field').value = data.start_time || "";
         
-        // 判斷彈性
-        const isFlex = data.is_flexible || text.includes("有空");
+        // 判斷彈性邏輯：如果使用者沒說「幾點」，或是說了「找時間」，則為彈性
+        const isFlex = data.is_flexible === true || text.includes("有空") || text.includes("找時間");
         document.getElementById('is_flexible_field').value = isFlex;
         
         const suggestion = document.getElementById('ai_suggestion');
         suggestion.classList.remove('d-none');
         suggestion.innerHTML = isFlex ? 
-            "✨ <b>AI 建議：</b> 系統將自動避開您的「上課」、「家教」等所有日曆衝突，為您找尋空檔。" : 
-            "📍 <b>AI 建議：</b> 此為固定行程，將排定於指定時間。";
+            "✨ <b>AI 建議：</b> 系統將自動避開您的所有日曆衝突，為您找尋最佳空檔。" : 
+            "📍 <b>AI 建議：</b> 此為固定行程，將精確排定在您指定的時間。";
 
-        if (data.is_recurring) document.getElementById('recurrence_field').value = "DAILY";
+        if (data.is_recurring) {
+            document.getElementById('recurrence_field').value = "DAILY";
+        }
 
     } catch (e) {
-        alert("解析失敗");
+        alert("連線到 AI 伺服器失敗，請手動檢查填寫。");
     } finally {
         btn.disabled = false;
-        btn.innerText = "開始解析";
+        btn.innerText = "開始解析指令";
     }
 }
 </script>
