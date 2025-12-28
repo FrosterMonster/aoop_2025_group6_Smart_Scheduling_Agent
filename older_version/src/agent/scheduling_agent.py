@@ -57,8 +57,7 @@ class SchedulingAgent:
             raise ValueError("GOOGLE_API_KEY not found. Check your .env file.")
         
         # ▼▼▼ 修改這裡：改回 gemini-1.5-flash ▼▼▼
-        self._llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash-latest", temperature=0)
-
+        self._llm = ChatGoogleGenerativeAI(model="gemini-pro", temperature=0)
         # --- 使用自定義 Prompt ---
         prompt = PromptTemplate.from_template(CUSTOM_SYSTEM_PROMPT)
         
