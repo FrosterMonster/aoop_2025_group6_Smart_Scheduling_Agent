@@ -1,4 +1,4 @@
-"""LLM Agent for natural language processing with multi-provider support (Claude, OpenAI, Gemini)"""
+"""LLM Agent for natural language processing with multi-provider support (Claude, OpenAI, Gemini, Groq)"""
 
 import logging
 import time
@@ -815,6 +815,68 @@ Non-scheduling:
         return type_map.get(openai_type, genai.protos.Type.STRING)
 
 
+class GroqProvider(BaseLLMProvider):
+    """Groq provider with lazy initialization (OpenAI-compatible API)"""
+
+    def __init__(self, config: ConfigManager):
+        self.config = config
+        self.api_key = config.get_api_key('groq')
+        self.model = config.get_groq_model()
+        self.client = None
+        self._initialized = False
+
+    def _ensure_initialized(self):
+        """Lazy initialization - only load groq when actually needed"""
+        if self._initialized:
+            return
+
+        self._initialized = True
+        if self.api_key:
+            try:
+                logger.info(f"Initializing Groq provider: {self.model}")
+                from groq import Groq
+                self.client = Groq(api_key=self.api_key)
+                logger.info(f"Groq provider initialized successfully")
+            except ImportError:
+                logger.error("groq package not installed. Run: pip install groq")
+                self.client = None
+            except Exception as e:
+                logger.error(f"Failed to initialize Groq client: {e}")
+                self.client = None
+
+    def is_available(self) -> bool:
+        if not self._initialized and self.api_key:
+            self._ensure_initialized()
+        return self.client is not None
+
+    def get_provider_name(self) -> str:
+        return "groq"
+
+    @retry_with_exponential_backoff(max_retries=2)
+    def call_llm(self, messages: List[Dict], tools: List[Dict], max_tokens: int) -> Dict:
+        """Call Groq API with automatic retry on failure
+
+        Groq uses OpenAI-compatible API, so we can use the same format.
+        """
+        self._ensure_initialized()  # Lazy load on first API call
+
+        completion = self.client.chat.completions.create(
+            model=self.model,
+            messages=messages,
+            tools=tools,
+            tool_choice="auto",
+            max_tokens=max_tokens,
+            temperature=0.7
+        )
+
+        message = completion.choices[0].message
+
+        return {
+            'content': message.content,
+            'tool_calls': message.tool_calls
+        }
+
+
 class LLMAgent:
     """Multi-provider LLM agent for processing natural language scheduling requests"""
 
@@ -844,6 +906,7 @@ class LLMAgent:
             'openai': OpenAIProvider,
             'gemini': GeminiProvider,  # Gemini support added
             'google': GeminiProvider,  # Alias for gemini
+            'groq': GroqProvider,  # Groq support added (OpenAI-compatible)
         }
 
         provider_class = provider_map.get(self.provider_name.lower())

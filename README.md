@@ -56,6 +56,10 @@ echo "LLM_PROVIDER=openai" >> .env
 # Option C: Google Gemini (Free tier available)
 echo "GEMINI_API_KEY=your-gemini-key-here" >> .env
 echo "LLM_PROVIDER=gemini" >> .env
+
+# Option D: Groq (Fast & Free tier available)
+echo "GROQ_API_KEY=your-groq-key-here" >> .env
+echo "LLM_PROVIDER=groq" >> .env
 ```
 
 **Google Calendar**:
