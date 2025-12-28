@@ -116,6 +116,15 @@ def _rule_based_fallback(nl_text: str) -> Dict[str, Any]:
 
         start_time = f"{hour:02d}:{minute:02d}"
         is_flexible = False
+    # ---------- 語意型彈性事件 ----------
+    # 像是「找空時間 / 幫我找 / 有空的時候」
+    SEMANTIC_FLEXIBLE_KEYWORDS = [
+        "找空時間", "找有空", "有空時間", "幫我找", "空檔", "空時間"
+    ]
+
+    if any(k in nl_text for k in SEMANTIC_FLEXIBLE_KEYWORDS):
+        start_time = None
+        is_flexible = True
 
     # ---------- 時長（分鐘） ----------
     duration = 60  # 預設 1 小時
