@@ -6,29 +6,24 @@ from src.agent.scheduling_agent import SchedulingAgent
 load_dotenv()
 
 def main():
-    print("Initializing Smart Scheduling Agent...")
+    print("Initializing Smart Scheduling Agent (Week 3 Mode)...")
     calendar_tool = CalendarTool()
     
-    # Increase iterations to 5 so it has enough steps to Create -> Create -> List -> Delete
+    # We need enough steps for: List -> Think -> Update
     my_agent = SchedulingAgent(tools=[calendar_tool])
-    # Manually adjust the limit for this complex test
-    my_agent._executor.max_iterations = 8 
+    my_agent._executor.max_iterations = 5 
 
     today = datetime.datetime.now().strftime("%Y-%m-%d")
-    current_day = datetime.datetime.now().strftime("%A")
 
-    print("\n--- TEST SUITE: Create Duplicates & Delete One ---")
+    print("\n--- TEST: Reschedule an Event ---")
     
-    # We give a complex instruction that forces the full workflow
     user_query = (
-        "I want to test my calendar. "
-        "1. Schedule a 'Strategy Meeting' for tomorrow at 9 AM to 10 AM. "
-        "2. Schedule ANOTHER 'Strategy Meeting' for the same time (create a duplicate). "
-        "3. Check my upcoming meetings to see the IDs. "
-        "4. Delete one of the 'Strategy Meetings' using its ID."
+        "Check my upcoming 'Project Kickoff' meeting. "
+        "It's currently scheduled for 2 PM, but I need to move it to 4 PM on the same day. "
+        "Please reschedule it."
     )
     
-    context_query = f"Today is {today} ({current_day}). {user_query}"
+    context_query = f"Today is {today}. {user_query}"
     
     print(f"Query: {context_query}")
     print("-" * 50)
