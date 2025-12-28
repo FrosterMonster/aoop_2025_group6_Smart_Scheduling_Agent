@@ -263,6 +263,12 @@ def _post_process_and_validate(raw: Dict[str, Any], nl_text: str) -> List[Dict[s
             title = re.sub(p, "", title)
 
         title = title.strip()
+        # ---------- 最後一道：活動本體修正 ----------
+
+        # 如果 title 還以「找」開頭，代表是調度語意，去掉「找」
+        if title.startswith("找"):
+            title = title[1:].strip()
+
 
         # 如果清完只剩一個動詞或空白，保底
         if not title:
@@ -302,7 +308,7 @@ def _post_process_and_validate(raw: Dict[str, Any], nl_text: str) -> List[Dict[s
 
         # 如果語意上是找空時間，一定是彈性
         if any(k in nl_text for k in [
-            "找空時間", "找空間時間", "找有空", "幫我找", "空檔", "空時間"
+            "找空時間", "找空間時間", "找有空", "幫我找", "空檔", "空時間", "找"
         ]):
             is_flexible = True
             start_time = None
