@@ -1,4 +1,3 @@
-# main.py
 import datetime
 from dotenv import load_dotenv
 from src.tools.calendar import CalendarTool
@@ -8,31 +7,25 @@ load_dotenv()
 
 def main():
     print("Initializing Smart Scheduling Agent...")
-    
-    # 1. Instantiate Tools
     calendar_tool = CalendarTool()
-    
-    # 2. Instantiate Agent
     my_agent = SchedulingAgent(tools=[calendar_tool])
 
-    # 3. Get Current Date dynamically
     today = datetime.datetime.now().strftime("%Y-%m-%d")
-    current_day = datetime.datetime.now().strftime("%A") # e.g., "Monday"
+    current_day = datetime.datetime.now().strftime("%A")
 
-    # 4. Construct the query with context
-    # We explicitly tell the agent "Today is..." so it can calculate "tomorrow"
-    user_query = "Schedule a 'Project Kickoff' meeting for tomorrow from 2pm to 3pm."
+    # TEST: Ask the agent to find and delete the duplicate
+    print("\n--- TEST: Delete a Duplicate Event ---")
+    user_query = "Check my upcoming meetings. If there are multiple 'Project Kickoff' meetings, delete one of them."
+    
     context_query = f"Today is {today} ({current_day}). {user_query}"
     
-    print(f"\nUser Query: {user_query}")
-    print(f"System Context: {context_query}")
+    print(f"Query: {context_query}")
     print("-" * 50)
 
-    # 5. Run Agent
     result = my_agent(context_query)
     
     print("-" * 50)
-    print(f"Agent Response: {result}")
+    print(f"Final Result: {result}")
 
 if __name__ == "__main__":
     main()

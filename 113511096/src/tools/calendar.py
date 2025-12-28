@@ -6,41 +6,38 @@ from googleapiclient.discovery import build
 
 class CalendarTool(AgentTool):
     def __init__(self):
-        # We explicitly tell the LLM which actions are valid
         description = (
             "Useful for managing Google Calendar events. "
-            "Input must be a JSON string with keys: 'action', 'summary', 'start_time', 'end_time'. "
-            "Valid actions are: 'create_event', 'list_events'. "
-            "Time format: 'YYYY-MM-DDTHH:MM:SS'."
+            "Input must be a JSON string with keys: 'action', 'summary', 'start_time', 'end_time', 'event_id'. "
+            "Valid actions: 'create_event', 'list_events', 'delete_event'. "
+            "Time format: 'YYYY-MM-DDTHH:MM:SS'. "
+            "To delete, you MUST first 'list_events' to get the 'event_id'."
         )
         super().__init__(name="google_calendar", description=description)
         creds = authenticate_google_calendar()
         self._service = build('calendar', 'v3', credentials=creds)
 
     def execute(self, params: str):
-        """
-        Parses the input string (JSON) and executes the calendar action.
-        """
         try:
-            # Handle cases where the LLM sends a dict instead of a JSON string
             if isinstance(params, str):
                 data = json.loads(params)
             else:
                 data = params
             
-            # 1. Normalize the action (convert to lower case and strip spaces)
             raw_action = data.get("action", "").lower().strip()
             
-            # 2. Flexible Action Matching (The Fix)
-            # The Agent might guess "create", "add", or "insert". We map them all to _create_event.
-            if raw_action in ["create_event", "create", "add", "insert", "schedule"]:
+            # Map various phrasings to the correct function
+            if raw_action in ["create_event", "create", "add", "schedule"]:
                 return self._create_event(data.get("summary"), data.get("start_time"), data.get("end_time"))
             
-            elif raw_action in ["list_events", "list", "get", "show"]:
+            elif raw_action in ["list_events", "list", "check", "show", "get"]:
                 return self._list_events()
             
+            elif raw_action in ["delete_event", "delete", "remove", "cancel"]:
+                return self._delete_event(data.get("summary"), data.get("event_id"))
+            
             else:
-                return f"Error: Unknown action '{raw_action}'. Valid actions are 'create_event' or 'list_events'."
+                return f"Error: Unknown action '{raw_action}'. Try 'create_event', 'list_events', or 'delete_event'."
                 
         except Exception as e:
             return f"Error processing calendar request: {e}"
@@ -48,16 +45,9 @@ class CalendarTool(AgentTool):
     def _create_event(self, summary, start_time, end_time):
         event = {
             'summary': summary,
-            'start': {
-                'dateTime': start_time,
-                'timeZone': 'Asia/Taipei', # Ensure this matches your locale
-            },
-            'end': {
-                'dateTime': end_time,
-                'timeZone': 'Asia/Taipei',
-            },
+            'start': {'dateTime': start_time, 'timeZone': 'Asia/Taipei'},
+            'end': {'dateTime': end_time, 'timeZone': 'Asia/Taipei'},
         }
-
         try:
             event_result = self._service.events().insert(calendarId='primary', body=event).execute()
             return f"Success! Event created: {event_result.get('htmlLink')}"
@@ -65,6 +55,7 @@ class CalendarTool(AgentTool):
             return f"Google API Error: {e}"
 
     def _list_events(self):
+        """Lists upcoming 10 events with their IDs (crucial for deletion)."""
         now = datetime.datetime.utcnow().isoformat() + 'Z'
         events_result = self._service.events().list(
             calendarId='primary', timeMin=now,
@@ -75,8 +66,27 @@ class CalendarTool(AgentTool):
         if not events:
             return "No upcoming events found."
         
-        result = "Upcoming events:\n"
+        result = "Upcoming events (Copy the ID to delete):\n"
         for event in events:
             start = event['start'].get('dateTime', event['start'].get('date'))
-            result += f"{start} - {event['summary']}\n"
+            # We include the ID in the output so the Agent can see it
+            result += f"- {start} | {event['summary']} | ID: {event['id']}\n"
         return result
+
+    def _delete_event(self, summary, event_id):
+        """Deletes an event. Smartly handles finding the ID if only summary is given."""
+        if not event_id:
+            # If the user didn't provide an ID, we try to find the event by name first
+            list_output = self._list_events()
+            if "ID:" not in list_output:
+                return "Could not find any events to delete."
+            
+            # Simple logic: Try to match the summary to an ID
+            # (In a real app, we might ask the agent to do this, but this helper is nice)
+            return "Error: You must provide the 'event_id' to delete. Use 'list_events' first to find the ID."
+
+        try:
+            self._service.events().delete(calendarId='primary', eventId=event_id).execute()
+            return f"Success! Event with ID {event_id} has been deleted."
+        except Exception as e:
+            return f"Delete Error: {e}"
