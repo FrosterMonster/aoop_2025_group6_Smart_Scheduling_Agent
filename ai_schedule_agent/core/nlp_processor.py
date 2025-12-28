@@ -154,12 +154,17 @@ class NLPProcessor:
         text_lower = text.lower()
         original_text = text
 
-        # Determine action
-        if any(word in text_lower for word in ['schedule', 'book', 'arrange', 'set up', 'add', 'create']):
+        # Determine action (including Chinese keywords)
+        create_keywords = ['schedule', 'book', 'arrange', 'set up', 'add', 'create',
+                          '安排', '排', '訂', '預定', '建立', '新增']
+        reschedule_keywords = ['reschedule', 'move', 'change', '改', '移動', '更改', '調整']
+        cancel_keywords = ['cancel', 'delete', 'remove', '取消', '刪除', '移除']
+
+        if any(word in text_lower or word in text for word in create_keywords):
             result['action'] = 'create'
-        elif any(word in text_lower for word in ['reschedule', 'move', 'change']):
+        elif any(word in text_lower or word in text for word in reschedule_keywords):
             result['action'] = 'reschedule'
-        elif any(word in text_lower for word in ['cancel', 'delete', 'remove']):
+        elif any(word in text_lower or word in text for word in cancel_keywords):
             result['action'] = 'cancel'
 
         # Determine event type
@@ -774,6 +779,7 @@ REASON: Free slot in afternoon, no conflicts, good spacing"""
         - Brackets: 「」 "" 『』
         - Time ranges: 到 (to)
         - Relative dates: 今天/明天/後天
+        - Duration: X小時
 
         Args:
             text: Natural language text (Chinese or mixed)
@@ -791,13 +797,26 @@ REASON: Free slot in afternoon, no conflicts, good spacing"""
             summary = m.group(1)
         else:
             # Pattern 2: 安排「...」 or 安排...
-            m2 = re.search(r'安排(?:一個|個)?(?:「([^」]+)」|(.+?)(?:，|,|。|$))', text)
+            m2 = re.search(r'[安排排](?:一個|個)?(?:「([^」]+)」|(.+?)(?:小時|，|,|。|$))', text)
             if m2:
                 summary = m2.group(1) or m2.group(2)
 
         if summary:
             result['title'] = summary.strip()
             logger.debug(f"Chinese pattern extracted title: '{result['title']}'")
+
+        # Extract duration: X小時 or X分鐘
+        duration_match = re.search(r'(\d+)\s*小時', text)
+        if duration_match:
+            hours = int(duration_match.group(1))
+            result['duration'] = hours * 60  # Convert to minutes
+            logger.debug(f"Chinese pattern extracted duration: {result['duration']} minutes ({hours} hours)")
+
+        if not duration_match:
+            minute_match = re.search(r'(\d+)\s*分鐘', text)
+            if minute_match:
+                result['duration'] = int(minute_match.group(1))
+                logger.debug(f"Chinese pattern extracted duration: {result['duration']} minutes")
 
         # Extract time range using '到' (to) pattern
         if '到' in text:
@@ -822,15 +841,53 @@ REASON: Free slot in afternoon, no conflicts, good spacing"""
                     result['duration'] = int((end_dt - start_dt).total_seconds() / 60)
                     logger.debug(f"Chinese pattern calculated duration: {result['duration']} minutes")
 
-        # Extract single time with relative date pattern: 今天/明天/後天...X點
+        # Extract single time with relative date pattern: 明天下午/今天晚上 etc.
         if not result.get('datetime'):
-            m3 = re.search(r'(今天|明天|後天|本週\S*|下週\S*).*?(\d{1,2})\s*點', text)
-            if m3:
-                time_str = m3.group(0)
-                dt = parse_nl_time(time_str)
-                if dt:
-                    result['datetime'] = dt
-                    logger.debug(f"Chinese pattern extracted datetime from relative: {dt}")
+            # More flexible pattern for Chinese relative dates
+            patterns = [
+                r'(明天|今天|後天)(下午|上午|早上|中午|晚上|傍晚)?',  # Tomorrow afternoon, etc.
+                r'(今天|明天|後天).*?(\d{1,2})\s*點',  # Today...2pm
+                r'(本週|下週)(一|二|三|四|五|六|日)',  # This week Monday
+            ]
+
+            for pattern in patterns:
+                m3 = re.search(pattern, text)
+                if m3:
+                    time_str = m3.group(0)
+
+                    # If specific time (X點) is mentioned, use it
+                    if '點' in time_str:
+                        dt = parse_nl_time(time_str)
+                        if dt:
+                            result['datetime'] = dt
+                            logger.debug(f"Chinese pattern extracted specific datetime: {dt}")
+                            break
+                    else:
+                        # NO specific time - store time preference for scheduling engine
+                        # Don't set datetime - let scheduling engine find optimal slot
+                        time_period = None
+                        if '下午' in time_str:
+                            time_period = 'afternoon'
+                            result['time_preference'] = {'period': 'afternoon', 'start_hour': 13, 'end_hour': 18}
+                        elif '上午' in time_str or '早上' in time_str:
+                            time_period = 'morning'
+                            result['time_preference'] = {'period': 'morning', 'start_hour': 9, 'end_hour': 12}
+                        elif '晚上' in time_str or '傍晚' in time_str:
+                            time_period = 'evening'
+                            result['time_preference'] = {'period': 'evening', 'start_hour': 18, 'end_hour': 21}
+                        elif '中午' in time_str:
+                            time_period = 'noon'
+                            result['time_preference'] = {'period': 'noon', 'start_hour': 11, 'end_hour': 14}
+
+                        # Store target date without time (scheduling engine will find slot)
+                        date_only_str = m3.group(1)  # 明天/今天/後天
+                        dt = parse_nl_time(date_only_str)
+                        if dt:
+                            # Store as target_date instead of datetime
+                            result['target_date'] = dt.date()
+                            logger.info(f"Chinese pattern: target_date={dt.date()}, time_preference={time_period}, "
+                                       f"let scheduling engine find optimal slot")
+                            break
 
         logger.debug(f"Chinese pattern extraction complete: {list(result.keys())}")
         return result

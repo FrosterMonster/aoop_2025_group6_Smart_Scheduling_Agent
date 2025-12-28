@@ -171,6 +171,7 @@ class QuickScheduleTab:
 
             # Date and time
             if parsed.get('datetime'):
+                # User specified exact time - use it
                 dt = parsed['datetime']
                 self.form_entries['date'].insert(0, dt.strftime('%Y-%m-%d'))
                 self.form_entries['start_time'].insert(0, dt.strftime('%H:%M'))
@@ -178,11 +179,112 @@ class QuickScheduleTab:
                 # Duration
                 duration = parsed.get('duration', self.scheduling_engine.user_profile.preferred_meeting_length)
                 self.form_entries['duration'].insert(0, str(duration))
-            else:
-                # Try to find optimal time
+            elif parsed.get('target_date') and parsed.get('time_preference'):
+                # User specified time period (e.g., "明天下午") - find optimal slot within that period
+                import datetime as dt_module
+                from datetime import timedelta
+
+                target_date = parsed['target_date']
+                time_pref = parsed['time_preference']
+                duration = parsed.get('duration', self.scheduling_engine.user_profile.preferred_meeting_length)
+                start_hour = time_pref.get('start_hour', 9)
+                end_hour = time_pref.get('end_hour', 18)
+
+                # Create event with duration
                 temp_event = Event(
                     title=title or 'New Event',
                     event_type=parsed.get('event_type', EventType.MEETING),
+                    duration_minutes=duration,
+                    participants=participants,
+                    location=location
+                )
+
+                # CRITICAL: Manually find free slots STRICTLY within the time preference window
+                # We can't rely on find_optimal_slot because it uses working_hours from profile
+                # which might be wider than the user's requested time period
+
+                # Create search window for the specific time period
+                window_start = dt_module.datetime.combine(target_date, dt_module.time(hour=start_hour))
+                window_end = dt_module.datetime.combine(target_date, dt_module.time(hour=end_hour))
+
+                # Get busy times for the target date
+                day_start = dt_module.datetime.combine(target_date, dt_module.time(hour=0))
+                day_end = dt_module.datetime.combine(target_date, dt_module.time(hour=23, minute=59))
+
+                existing_events = self.scheduling_engine.calendar.get_events(
+                    day_start.isoformat() + 'Z',
+                    day_end.isoformat() + 'Z'
+                )
+
+                # Extract busy slots
+                busy_slots = []
+                for e in existing_events:
+                    if 'dateTime' in e.get('start', {}):
+                        event_start = dt_module.datetime.fromisoformat(e['start']['dateTime'].replace('Z', '+00:00'))
+                        event_end = dt_module.datetime.fromisoformat(e['end']['dateTime'].replace('Z', '+00:00'))
+                        event_start = event_start.replace(tzinfo=None)
+                        event_end = event_end.replace(tzinfo=None)
+                        busy_slots.append((event_start, event_end))
+
+                # Find free slots STRICTLY within the time preference window
+                optimal_slot = None
+                best_score = -1
+                current_slot = window_start
+
+                while current_slot + timedelta(minutes=duration) <= window_end:
+                    slot_end = current_slot + timedelta(minutes=duration)
+
+                    # Skip if in the past
+                    if current_slot < dt_module.datetime.now() + timedelta(minutes=30):
+                        current_slot += timedelta(minutes=30)
+                        continue
+
+                    # Check if this slot is free
+                    is_free = True
+                    for busy_start, busy_end in busy_slots:
+                        # Slots overlap if: NOT (slot ends before busy starts OR slot starts after busy ends)
+                        if not (slot_end <= busy_start or current_slot >= busy_end):
+                            is_free = False
+                            break
+
+                    if is_free:
+                        # Calculate score using scheduling engine's scoring logic
+                        score = self.scheduling_engine._calculate_slot_score(current_slot, temp_event.event_type)
+                        if score > best_score:
+                            best_score = score
+                            optimal_slot = (current_slot, slot_end)
+
+                    # Move to next 30-minute slot
+                    current_slot += timedelta(minutes=30)
+
+                if optimal_slot:
+                    start_time, end_time = optimal_slot
+
+                    # Slot is guaranteed to fit within window (we checked in the search loop)
+                    self.form_entries['date'].insert(0, start_time.strftime('%Y-%m-%d'))
+                    self.form_entries['start_time'].insert(0, start_time.strftime('%H:%M'))
+                    self.form_entries['duration'].insert(0, str(duration))
+
+                    period_name = time_pref.get('period', 'preferred time')
+                    self.result_text.insert(tk.END, f"\n✅ Found optimal {period_name} slot: {start_time.strftime('%H:%M')} - {end_time.strftime('%H:%M')}\n")
+                    self.result_text.insert(tk.END, f"   Free slot within {start_hour}:00-{end_hour}:00 window as requested\n")
+                else:
+                    # No slot found within the time preference window
+                    period_name = time_pref.get('period', 'preferred time')
+                    self.result_text.insert(tk.END, f"\n⚠️ No free {duration}-minute slot in {period_name} ({start_hour}:00-{end_hour}:00)\n")
+                    self.result_text.insert(tk.END, f"   on {target_date.strftime('%Y-%m-%d')}\n")
+                    self.result_text.insert(tk.END, f"\n💡 Suggestions:\n")
+                    self.result_text.insert(tk.END, f"   • Try a shorter duration (e.g., {duration//2} minutes)\n")
+                    self.result_text.insert(tk.END, f"   • Choose a different time period (morning/evening)\n")
+                    self.result_text.insert(tk.END, f"   • Select a different day\n")
+            else:
+                # No datetime or time preference - try to find any optimal time
+                duration = parsed.get('duration', self.scheduling_engine.user_profile.preferred_meeting_length)
+
+                temp_event = Event(
+                    title=title or 'New Event',
+                    event_type=parsed.get('event_type', EventType.MEETING),
+                    duration_minutes=duration,
                     participants=participants,
                     location=location
                 )
@@ -192,9 +294,7 @@ class QuickScheduleTab:
                     start_time, end_time = optimal_slot
                     self.form_entries['date'].insert(0, start_time.strftime('%Y-%m-%d'))
                     self.form_entries['start_time'].insert(0, start_time.strftime('%H:%M'))
-
-                    duration_minutes = int((end_time - start_time).total_seconds() / 60)
-                    self.form_entries['duration'].insert(0, str(duration_minutes))
+                    self.form_entries['duration'].insert(0, str(duration))
 
                     self.result_text.insert(tk.END, f"\n💡 Suggested optimal time: {start_time.strftime('%Y-%m-%d %H:%M')}\n")
 
