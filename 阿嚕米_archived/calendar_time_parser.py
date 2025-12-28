@@ -192,11 +192,18 @@ def _post_process_and_validate(raw: Dict[str, Any], nl_text: str) -> List[Dict[s
 
     for ev in raw["events"]:
         raw_title = ev.get("title") or nl_text
+
+        # ① 移除時間相關詞
         title = re.sub(
-            r"(明天|今天|後天|早上|下午|晚上|上午|中午|凌晨|\d+點|\d+:\d+)",
+            r"(明天|今天|後天|本週|下週|早上|下午|晚上|上午|中午|凌晨|"
+            r"\d+點|\d+:\d+|"
+            r"[一二兩三四五六七八九十\d]+小時)",
             "",
             raw_title
-        ).strip()
+        )
+
+        # ② 移除結構詞，只保留事件核心
+        title = re.sub(r"(有|的)", "", title).strip()
 
         # 日期
         date_str = ev.get("date")
