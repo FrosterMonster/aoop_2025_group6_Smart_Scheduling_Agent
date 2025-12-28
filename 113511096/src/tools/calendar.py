@@ -1,29 +1,45 @@
-from googleapiclient.discovery import build
+# src/tools/calendar.py (Update)
+import datetime
+import json
 from src.tools.base import AgentTool
 from src.utils.auth import authenticate_google_calendar
-import datetime
+from googleapiclient.discovery import build
 
 class CalendarTool(AgentTool):
-    """
-    Inherits from AgentTool, specializing in Google Calendar API interactions.
-    """
     def __init__(self):
-        super().__init__(name="Google Calendar", description="Manage calendar events")
-        # Initialize API service
+        # The description is CRITICAL. It tells the LLM how to use this tool.
+        description = (
+            "Useful for managing Google Calendar events. "
+            "Input should be a JSON string with keys: 'action', 'summary', 'start_time', 'end_time'. "
+            "start_time and end_time must be in ISO format 'YYYY-MM-DDTHH:MM:SS'."
+        )
+        super().__init__(name="google_calendar", description=description)
         creds = authenticate_google_calendar()
-        self._service = build('calendar', 'v3', credentials=creds) # Encapsulation: _service 
+        self._service = build('calendar', 'v3', credentials=creds)
 
-    def execute(self, action: str, **kwargs):
+    def execute(self, params: str):
         """
-        Implementation of the abstract execute method (Polymorphism).
-        Dispatch based on action type.
+        Parses the input string (JSON) and executes the calendar action.
         """
-        if action == "create_event":
-            return self._create_event(kwargs.get("summary"), kwargs.get("start_time"), kwargs.get("end_time"))
-        elif action == "list_events":
-            return self._list_events()
-        else:
-            return f"Action '{action}' not supported."
+        try:
+            # The LLM might send a JSON string, so we parse it
+            if isinstance(params, str):
+                data = json.loads(params)
+            else:
+                data = params
+            
+            action = data.get("action")
+            
+            if action == "create_event":
+                return self._create_event(data.get("summary"), data.get("start_time"), data.get("end_time"))
+            elif action == "list_events":
+                return self._list_events()
+            else:
+                return f"Error: Unknown action '{action}'"
+        except Exception as e:
+            return f"Error processing calendar request: {e}"
+
+    # ... (Keep _create_event and _list_events from Week 1) ...
 
     def _create_event(self, summary, start_time, end_time):
         """
