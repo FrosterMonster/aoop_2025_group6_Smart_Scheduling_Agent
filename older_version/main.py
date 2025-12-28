@@ -1,4 +1,5 @@
 import datetime
+import time
 from dotenv import load_dotenv
 from src.tools.calendar import CalendarTool
 from src.agent.scheduling_agent import SchedulingAgent
@@ -6,27 +7,37 @@ from src.agent.scheduling_agent import SchedulingAgent
 load_dotenv()
 
 def main():
-    print("Initializing Smart Scheduling Agent (Quota Saving Mode)...")
+    print("Initializing Smart Scheduling Agent (Week 4: Conflict Detection)...")
     calendar_tool = CalendarTool()
     my_agent = SchedulingAgent(tools=[calendar_tool])
-    my_agent._executor.max_iterations = 5 
 
     today = datetime.datetime.now().strftime("%Y-%m-%d")
 
-    print("\n[Phase 2 Only] Testing Rescheduling...")
-    print("(Please ensure you have MANUALLY created a 'Project Kickoff' meeting for tomorrow 2PM)")
-    
-    # 直接要求改期
-    reschedule_query = (
+    print("\n--- Phase 1: Create an obstacle (The 'Client Meeting') ---")
+    # 我們先佔住明天下午 2 點到 3 點的時段
+    setup_query = (
         f"Today is {today}. "
-        "I need to change the 'Project Kickoff' meeting scheduled for tomorrow 2 PM. "
-        "Please find its ID and move it to 4 PM (16:00) on the same day."
+        "Schedule an 'Important Client Meeting' for tomorrow from 2 PM to 3 PM."
+    )
+    print(f"User: {setup_query}")
+    my_agent(setup_query)
+    
+    print("\n" + "="*50 + "\n")
+    print("Waiting for sync...")
+    time.sleep(3)
+
+    print("\n--- Phase 2: The Conflict Test ---")
+    # 嘗試在「同一時間」塞入另一個會議
+    # 聰明的 Agent 應該要先 List -> 發現衝突 -> 拒絕並回報
+    conflict_query = (
+        f"Today is {today}. "
+        "Schedule a 'Team Sync' for tomorrow from 2 PM to 3 PM."
     )
     
-    print(f"User: {reschedule_query}")
+    print(f"User: {conflict_query}")
     print("-" * 30)
     
-    result = my_agent(reschedule_query)
+    result = my_agent(conflict_query)
     
     print("-" * 50)
     print(f"Final Result: {result}")
