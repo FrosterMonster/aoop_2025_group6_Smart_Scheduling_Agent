@@ -34,6 +34,12 @@ CHINESE_NUM_MAP = {
     "九": 9,
     "十": 10,
 }
+def normalize_chinese_time(text: str) -> str:
+    def repl(match):
+        zh_num = match.group(1)
+        return f"{chinese_to_int(zh_num)}點"
+
+    return re.sub(r'([一二兩三四五六七八九十]{1,3})點', repl, text)
 
 # ---------- 公開介面 ----------
 def parse_with_ai(nl_text: str) -> Dict[str, Any]:
@@ -62,8 +68,7 @@ def parse_with_ai(nl_text: str) -> Dict[str, Any]:
 
 def _rule_based_fallback(nl_text: str) -> Dict[str, Any]:
 
-    text = nl_text  # 用副本，不污染原始輸入
-    text = normalize_chinese_time(text)
+    text = normalize_chinese_time(nl_text)
 
     """
     AI quota / error 時的最小可用 parser
@@ -77,16 +82,6 @@ def _rule_based_fallback(nl_text: str) -> Dict[str, Any]:
 
     start_time = None
     is_flexible = True
-
-    def normalize_chinese_time(text: str) -> str:
-        def repl(match):
-            zh_num = match.group(1)
-            return f"{chinese_to_int(zh_num)}點"
-
-        return re.sub(r'([一二兩三四五六七八九十]{1,3})點', repl, text)
-
-    for zh, num in CHINESE_NUM_MAP.items():
-        text = text.replace(f"{zh}小時", f"{num}小時")
 
     time_match = re.search(r'(\d{1,2})\s*(?:點|:)(\d{1,2})?', text)
     duration_match = re.search(r'(\d+)\s*小時', text)
