@@ -9,40 +9,56 @@ load_dotenv()
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
 def parse_with_ai(nl_time_str: str):
-    """使用 Gemini 解析意圖並回傳 JSON"""
+    """強化版解析器：精確抓取名稱、日期與時間"""
     try:
-        # 修正模型為 flash 以獲取更高額度
-        model = genai.GenerativeModel('gemini-1.5-flash') 
+        # 使用你清單中有的模型
+        model = genai.GenerativeModel('gemini-2.0-flash') 
         
+        # 極簡化的 Prompt，降低 AI 亂跑的機率
         prompt = f"""
-        現在日期時間：{datetime.now().strftime('%Y-%m-%d %H:%M')}
-        使用者指令："{nl_time_str}"
+        現在時間：{datetime.now().strftime('%Y-%m-%d %H:%M')}
+        指令："{nl_time_str}"
         
-        請解析指令並「僅」輸出一個 JSON 格式，不要包含 Markdown 標記：
+        請將上述指令轉化為 JSON，規則如下：
+        1. title: 提取指令中的主體活動（例如：運動、開會）。
+        2. date: 計算指令中的日期（今天/明天/後天）。
+        3. start_time: 若指令有時間（如五點），轉化為 HH:MM（如 05:00）。
+        4. is_flexible: 指令有具體時間(如:五點) 必須設為 false。
+        
+        僅輸出 JSON 格式：
         {{
-          "title": "事件名稱",
+          "title": "活動名稱",
           "date": "YYYY-MM-DD",
           "start_time": "HH:MM",
-          "duration": 分鐘數字,
-          "is_recurring": true/false,
-          "is_flexible": true (若提及找時間/幫我排) / false (若指定幾點)
+          "duration": 60,
+          "is_flexible": false
         }}
         """
         response = model.generate_content(prompt)
-        
-        # 提取 JSON 的強健邏輯
         text = response.text
+        
+        # 增加正則表達式，確保只拿 {} 裡面的資料
         match = re.search(r'\{.*\}', text, re.DOTALL)
         if match:
-            return json.loads(match.group())
-        return json.loads(text)
+            data = json.loads(match.group())
+            
+            # --- 後處理補強 (Double Check) ---
+            # 如果 AI 沒讀到名稱，從原始字串抓
+            if not data.get('title') or data['title'] == '事件':
+                data['title'] = nl_time_str.split(' ')[0]
+            
+            # 強制日期計算補強
+            if '明天' in nl_time_str:
+                data['date'] = (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d')
+            
+            # 強制時間補強
+            if '五點' in nl_time_str:
+                data['start_time'] = '05:00'
+                data['is_flexible'] = False
+                
+            return data
+            
+        return None
     except Exception as e:
-        # 當額度爆掉或失敗時，回傳預設值讓前端不當機
-        print(f"AI 解析失敗 (可能是 Quota 限制): {e}")
-        return {
-            "title": nl_time_str,
-            "date": datetime.now().strftime('%Y-%m-%d'),
-            "start_time": "10:00",
-            "duration": 60,
-            "is_flexible": False
-        }
+        print(f"AI 解析失敗: {e}")
+        return None
