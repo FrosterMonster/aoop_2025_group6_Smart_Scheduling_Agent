@@ -43,12 +43,10 @@ def test_weather_determinism():
     assert "Forecast" in result1
 
 # --- TEST 4: Calendar Tool Mock (Simulated) ---
-# We don't want to call real Google API in tests, so we test the parsing logic only.
 def test_calendar_input_validation():
     from src.tools.calendar import CalendarTool
     
-    # We can instantiate it even without credentials if we mock execute
-    # But here let's just test if the class exists and has correct name
     tool = CalendarTool()
     assert tool.name == "google_calendar"
-    assert "json" in tool.description
+    # FIX: Convert description to lower case before checking
+    assert "json" in tool.description.lower()
