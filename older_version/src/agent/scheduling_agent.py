@@ -1,18 +1,12 @@
-from langchain_openai import ChatOpenAI
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.tools import Tool
 from langchain_core.prompts import PromptTemplate
 from langchain.memory import ConversationBufferMemory
+from langchain.agents import AgentExecutor, create_react_agent
 from src.tools.base import AgentTool
 import os
 
-# ▼▼▼【關鍵修改】強制指向檔案的絕對路徑 ▼▼▼
-# 不要寫 from langchain.agents import ...
-# 改用下面這兩行，直接深入到檔案層級去抓
-from langchain.agents.agent import AgentExecutor
-from langchain.agents.react.agent import create_react_agent
-# ▲▲▲ 修改結束 ▲▲▲
-
-# --- Prompt 維持不變 ---
+# --- Week 5 最終版 Prompt ---
 CUSTOM_SYSTEM_PROMPT = """
 You are a Smart Scheduling Assistant. Your job is to manage the user's Google Calendar.
 
@@ -62,24 +56,28 @@ class SchedulingAgent:
             for tool in tools
         ]
 
-        if not os.getenv("OPENAI_API_KEY"):
-            raise ValueError("OPENAI_API_KEY not found. Check your .env file.")
+        if not os.getenv("GOOGLE_API_KEY"):
+            raise ValueError("GOOGLE_API_KEY not found. Check your .env file.")
         
-        # 使用 OpenAI GPT-4o
-        self._llm = ChatOpenAI(model="gpt-4o", temperature=0)
+        # 使用 Google 最穩定的免費模型
+        self._llm = ChatGoogleGenerativeAI(model="gemini-flash-latest", temperature=0)
 
+        # 設定 Prompt
         prompt = PromptTemplate(
             template=CUSTOM_SYSTEM_PROMPT,
             input_variables=["tools", "tool_names", "input", "agent_scratchpad", "chat_history"]
         )
         
+        # 初始化記憶體
         self.memory = ConversationBufferMemory(
             memory_key="chat_history",
             return_messages=True
         )
 
+        # 建立 Agent
         agent_construct = create_react_agent(self._llm, self._langchain_tools, prompt)
         
+        # 建立執行器 (掛載記憶體)
         self._executor = AgentExecutor(
             agent=agent_construct, 
             tools=self._langchain_tools, 
