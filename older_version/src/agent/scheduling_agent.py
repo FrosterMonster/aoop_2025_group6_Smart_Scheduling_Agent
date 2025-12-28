@@ -4,6 +4,7 @@ from langchain_core.prompts import PromptTemplate
 from langchain.memory import ConversationBufferMemory
 from langchain.agents import AgentExecutor, create_react_agent
 from src.tools.base import AgentTool
+from src.tools.preferences import PreferenceTool
 import os
 
 # --- Week 5 最終版 Prompt ---
@@ -48,11 +49,20 @@ class SchedulingAgent:
         self._tools = tools
         
         self._langchain_tools = [
+            
+            
             Tool(
                 name=tool.name,
                 func=tool.execute,
                 description=tool.description
             )
+            
+            Tool(
+                name=PreferenceTool.name,
+                func=PreferenceTool().execute,
+                description=PreferenceTool.description
+            )
+            
             for tool in tools
         ]
 
