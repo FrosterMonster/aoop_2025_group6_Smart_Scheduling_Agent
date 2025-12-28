@@ -4,28 +4,42 @@ from src.database import set_preference, get_all_preferences
 class PreferenceTool(AgentTool):
     name = "manage_preferences"
     description = """
-    Useful for saving or reading user preferences.
-    Input should be a string describing the action:
-    - To SAVE: "save: [key]: [value]" (e.g., "save: lunch_time: 12PM-1PM")
-    - To READ: "read_all"
+    Useful for saving user preferences (like lunch time, favorite meeting days) or reading them.
+    
+    Commands:
+    1. SAVE: "save: [key]: [value]" 
+       Example: "save: lunch_hour: 12pm to 1pm"
+       
+    2. READ: "read_all"
+       Returns a list of all known preferences.
     """
 
     def execute(self, input_str: str) -> str:
-        if input_str.strip() == "read_all":
+        clean_input = input_str.strip()
+        
+        # Handle "read_all"
+        if "read_all" in clean_input.lower():
             prefs = get_all_preferences()
             if not prefs:
-                return "No preferences found."
+                return "No preferences found in database."
             return f"Current User Preferences: {prefs}"
         
-        if input_str.startswith("save:"):
+        # Handle "save:"
+        if clean_input.lower().startswith("save:"):
             try:
-                # Parse "save: key: value"
-                parts = input_str.replace("save:", "").split(":", 1)
-                key = parts[0].strip()
-                value = parts[1].strip()
+                # Expected format: "save: key: value"
+                # We split by ':' only for the first 2 occurrences
+                parts = clean_input.split(":", 2)
+                
+                if len(parts) < 3:
+                    return "Error: Format must be 'save: key: value'"
+                
+                key = parts[1].strip()
+                value = parts[2].strip()
+                
                 set_preference(key, value)
-                return f"Successfully saved preference: {key} = {value}"
-            except Exception:
-                return "Error parsing save command. Use format 'save: key: value'"
+                return f"✅ Successfully saved preference: '{key}' = '{value}'"
+            except Exception as e:
+                return f"Error saving preference: {str(e)}"
         
-        return "Invalid command. Use 'read_all' or 'save: key: value'."
+        return "Invalid input. Please use 'save: key: value' or 'read_all'."

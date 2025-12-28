@@ -4,10 +4,13 @@ from langchain_core.prompts import PromptTemplate
 from langchain.memory import ConversationBufferMemory
 from langchain.agents import AgentExecutor, create_react_agent
 from src.tools.base import AgentTool
-from src.tools.preferences import PreferenceTool
 import os
 
-# --- Week 5 最終版 Prompt ---
+# --- IMPORT NEW TOOL ---
+from src.tools.preferences import PreferenceTool  # <--- NEW
+
+# --- SYSTEM PROMPT ---
+# We update the prompt to tell the Agent to check preferences!
 CUSTOM_SYSTEM_PROMPT = """
 You are a Smart Scheduling Assistant. Your job is to manage the user's Google Calendar.
 
@@ -28,12 +31,11 @@ Thought: Do I need to use a tool? No Final Answer: [your response here]
 
 
 IMPORTANT RULES:
-1. **MEMORY**: Use the chat history to understand context (e.g., "it", "that meeting").
-2. **SAFETY**: Before executing 'delete_event', you MUST ask the user for confirmation (e.g., "Are you sure you want to delete...?").
-   - If the user says "Yes", proceed to delete.
-   - If the user says "No", stop.
-3. **CONFLICTS**: Always run 'list_events' before creating/rescheduling to check for conflicts.
-4. **DATE**: Today is available in the input context.
+1. **CHECK PREFERENCES**: If the user asks to book a meeting, consider checking 'manage_preferences' (read_all) first to see if they have specific rules (e.g., no meetings on Friday).
+2. **MEMORY**: Use the chat history to understand context.
+3. **SAFETY**: Before executing 'delete_event', you MUST ask the user for confirmation.
+4. **CONFLICTS**: Always run 'list_events' before creating/rescheduling.
+5. **DATE**: Today's date is provided in context.
 
 Previous conversation history:
 {chat_history}
@@ -48,45 +50,53 @@ class SchedulingAgent:
     def __init__(self, tools: list[AgentTool]):
         self._tools = tools
         
+        # 1. Initialize Tools
         self._langchain_tools = [
-            
-            
             Tool(
                 name=tool.name,
                 func=tool.execute,
                 description=tool.description
             )
-            
-            Tool(
-                name=PreferenceTool.name,
-                func=PreferenceTool().execute,
-                description=PreferenceTool.description
-            )
-            
             for tool in tools
         ]
+        
+        # 2. ADD PREFERENCE TOOL
+        pref_tool = PreferenceTool()
+        self._langchain_tools.append(
+            Tool(
+                name=pref_tool.name,
+                func=pref_tool.execute,
+                description=pref_tool.description
+            )
+        )
 
         if not os.getenv("GOOGLE_API_KEY"):
             raise ValueError("GOOGLE_API_KEY not found. Check your .env file.")
         
-        # 使用 Google 最穩定的免費模型
-        self._llm = ChatGoogleGenerativeAI(model="gemini-flash-latest", temperature=0)
-        # 設定 Prompt
+        # 3. Initialize LLM
+        # Trying 'gemini-pro' (1.0 Pro) as a fallback since 1.5 failed for you
+        # This usually has better availability than Flash-Latest
+        self._llm = ChatGoogleGenerativeAI(
+            model="gemini-pro", 
+            temperature=0
+        )
+
+        # 4. Setup Prompt
         prompt = PromptTemplate(
             template=CUSTOM_SYSTEM_PROMPT,
             input_variables=["tools", "tool_names", "input", "agent_scratchpad", "chat_history"]
         )
         
-        # 初始化記憶體
+        # 5. Setup Memory
         self.memory = ConversationBufferMemory(
             memory_key="chat_history",
             return_messages=True
         )
 
-        # 建立 Agent
+        # 6. Create Agent
         agent_construct = create_react_agent(self._llm, self._langchain_tools, prompt)
         
-        # 建立執行器 (掛載記憶體)
+        # 7. Create Executor
         self._executor = AgentExecutor(
             agent=agent_construct, 
             tools=self._langchain_tools, 
