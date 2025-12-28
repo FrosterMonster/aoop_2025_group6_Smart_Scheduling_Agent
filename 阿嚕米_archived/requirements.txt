@@ -1,0 +1,12 @@
+python-dotenv>=0.21.0
+dateparser>=1.1.1
+pytz>=2024.0
+google-api-python-client>=2.99.0
+google-auth>=2.20.0
+google-auth-oauthlib>=1.0.0
+# The following are optional / provider-specific. Install only if you use them:
+# langchain (framework) and a provider SDK. Example:
+langchain>=0.0.300
+# If you want Gemini/Google GenAI integration, install the provider package recommended by LangChain docs,
+# or install 'google-generative-ai' from Google if you use Google's SDK. E.g.:
+# pip install google-generative-ai

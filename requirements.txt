@@ -5,17 +5,31 @@ google-auth-httplib2>=0.1.0
 google-api-python-client>=2.80.0
 
 # Machine Learning and Data Processing
-# NumPy: Use version compatible with Python 3.9-3.12
+# NumPy: Use version compatible with Python 3.9-3.13
 numpy>=1.24.0,<2.0.0; python_version < '3.12'
-numpy>=1.26.0,<3.0.0; python_version >= '3.12'
+numpy>=1.26.0,<3.0.0; python_version >= '3.12' and python_version < '3.13'
+numpy>=1.26.0,<3.0.0; python_version >= '3.13'
 scikit-learn>=1.2.0
 
 # Natural Language Processing
 spacy>=3.5.0
 dateparser>=1.1.8
 
+# LLM Integration
+openai>=1.0.0
+anthropic>=0.18.0
+google-generativeai>=0.3.0
+python-dotenv>=1.0.0
+
+# Timezone Support
+pytz>=2023.3
+
 # UI and Notifications
 plyer>=2.1.0
 
 # Additional dependencies
 python-dateutil>=2.8.2
+
+# Testing
+pytest>=7.4.0
+pytest-cov>=4.1.0
