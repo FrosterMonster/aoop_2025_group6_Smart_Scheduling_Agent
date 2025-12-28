@@ -804,18 +804,20 @@ REASON: Free slot in afternoon, no conflicts, good spacing"""
         # === 阿嚕米 Mock Mode: Title Extraction ===
         # Extract title from Chinese brackets or quotes (阿嚕米's pattern)
         summary = None
-        # Pattern 1: Chinese/English quotes: 「」 "" 『』 (exact match from 阿嚕米)
-        m = re.search(r'["\u201c\u201d\u300c\u300d\u300e\u300f](.+?)["\u201c\u201d\u300c\u300d\u300e\u300f]', text)
+        # Pattern 1: Chinese/English quotes: 「」 "" 『』《》 (exact match from 阿嚕米)
+        # Including book title marks 《》
+        m = re.search(r'["\u201c\u201d\u300c\u300d\u300e\u300f\u300a\u300b](.+?)["\u201c\u201d\u300c\u300d\u300e\u300f\u300a\u300b]', text)
         if m:
             summary = m.group(1)
             logger.debug(f"阿嚕米 pattern (quoted): extracted title '{summary}'")
         else:
-            # Pattern 2: Action keywords + optional 一個/個 + content (阿嚕米's pattern)
-            # Exact regex from 阿嚕米: r'安排(?:一個|個)?(?:「([^」]+)」|(.+?)(?:，|,|。|$))'
-            m2 = re.search(r'安排(?:一個|個)?(?:「([^」]+)」|(.+?)(?:，|,|。|$))', text)
+            # Pattern 2: Action keywords at start + content (enhanced pattern)
+            # Examples: "安排明天下午3點面試" -> need to extract just "面試"
+            # Match action keyword at the start, then extract just the event name
+            m2 = re.search(r'^(?:安排|排|訂|預定)(?:一個|個)?(?:「([^」]+)」)', text)
             if m2:
-                summary = m2.group(1) or m2.group(2)
-                logger.debug(f"阿嚕米 pattern (action): extracted title '{summary}'")
+                summary = m2.group(1)
+                logger.debug(f"阿嚕米 pattern (action + quoted): extracted title '{summary}'")
             else:
                 # Pattern 3: Extract event name after duration info (ASA enhancement)
                 # Examples: "明天下午排3小時開會" -> "開會", "排1小時討論" -> "討論"
@@ -824,14 +826,67 @@ REASON: Free slot in afternoon, no conflicts, good spacing"""
                     summary = duration_pattern.group(2).strip()
                     logger.debug(f"Enhanced pattern (post-duration): extracted title '{summary}'")
                 else:
-                    # Pattern 4: Extract after time + action keyword (排/安排)
+                    # Pattern 4: Extract after time + action keyword (排/安排/訂/預定)
                     # Examples: "明天下午3點排開會" -> "開會"
-                    time_action_pattern = re.search(r'(?:今天|明天|後天|本週|下週).*?\d+\s*點\s*(?:排|安排)(.+?)(?:，|,|。|$)', text)
+                    time_action_pattern = re.search(r'(?:今天|明天|後天|本週|下週).*?\d+\s*點\s*(?:排|安排|訂|預定)(.+?)(?:，|,|。|$)', text)
                     if time_action_pattern:
                         summary = time_action_pattern.group(1).strip()
                         logger.debug(f"Enhanced pattern (after time+action): extracted title '{summary}'")
+                    else:
+                        # Pattern 5: Extract after time range (X點到Y點) - NEW PATTERN
+                        # Examples: "明天下午2點到4點開會" -> "開會"
+                        time_range_pattern = re.search(r'\d+\s*點\s*到\s*\d+\s*點\s*(.+?)(?:，|,|。|$)', text)
+                        if time_range_pattern:
+                            summary = time_range_pattern.group(1).strip()
+                            logger.debug(f"Enhanced pattern (after time range): extracted title '{summary}'")
+                        else:
+                            # Pattern 6: Extract after single time point - NEW PATTERN
+                            # Examples: "明天下午2點討論專案" -> "討論專案", "今天晚上8點面試" -> "面試"
+                            single_time_pattern = re.search(r'\d+\s*點\s*(.+?)(?:，|,|。|$)', text)
+                            if single_time_pattern:
+                                summary = single_time_pattern.group(1).strip()
+                                logger.debug(f"Enhanced pattern (after single time): extracted title '{summary}'")
+                            else:
+                                # Pattern 7: Extract after time period (上午/下午/晚上) without specific time - NEW PATTERN
+                                # Examples: "明天下午開會" -> "開會", "今天晚上討論" -> "討論"
+                                period_pattern = re.search(r'(?:今天|明天|後天|本週|下週)(?:上午|下午|早上|中午|晚上|傍晚|清晨)\s*(.+?)(?:，|,|。|$)', text)
+                                if period_pattern:
+                                    summary = period_pattern.group(1).strip()
+                                    logger.debug(f"Enhanced pattern (after time period): extracted title '{summary}'")
+                                else:
+                                    # Pattern 8: Very simple - just date + event (no time) - NEW PATTERN
+                                    # Examples: "明天開會" -> "開會"
+                                    simple_pattern = re.search(r'^(?:今天|明天|後天|本週|下週)\s*(.+?)(?:，|,|。|$)', text)
+                                    if simple_pattern:
+                                        summary = simple_pattern.group(1).strip()
+                                        logger.debug(f"Enhanced pattern (simple date+event): extracted title '{summary}'")
+                                    else:
+                                        # Pattern 9: Action keyword at start + time + event - NEW PATTERN
+                                        # Examples: "安排明天下午3點面試" -> "面試"
+                                        action_time_pattern = re.search(r'^(?:安排|排|訂|預定).*?(?:\d+點|上午|下午|早上|中午|晚上)\s*(.+?)(?:，|,|。|$)', text)
+                                        if action_time_pattern:
+                                            summary = action_time_pattern.group(1).strip()
+                                            logger.debug(f"Enhanced pattern (action+time+event): extracted title '{summary}'")
 
         if summary:
+            # Clean up extracted title - remove action keywords and duration prefixes
+            summary = summary.strip()
+
+            # Remove action keywords at the start
+            summary = re.sub(r'^(?:排|安排|訂|預定)\s*', '', summary)
+
+            # Remove duration prefixes (e.g., "30分鐘站立會議" -> "站立會議")
+            summary = re.sub(r'^\d+\s*(?:小時|分鐘)\s*', '', summary)
+            summary = re.sub(r'^\d+\s*小時\s*\d+\s*分鐘\s*', '', summary)  # 2小時30分鐘
+            summary = re.sub(r'^半\s*小時\s*', '', summary)  # 半小時
+
+            # Remove fuzzy time expressions (大概/約/前後/左右)
+            summary = re.sub(r'(?:大概|約|前後|左右)\s*', '', summary)
+
+            # Remove participant references (跟...和...) - be more conservative
+            # Only remove if it looks like names (Latin letters or short Chinese names)
+            summary = re.sub(r'跟[A-Z][a-z]+(?:和|與)[A-Z][a-z]+\s*', '', summary)  # English names
+
             result['title'] = summary.strip()
             logger.info(f"阿嚕米 Mock mode extracted title: '{result['title']}'")
 

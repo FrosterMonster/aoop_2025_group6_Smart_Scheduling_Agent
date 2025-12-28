@@ -133,7 +133,7 @@ class ConfigManager:
         """Get API key for specified provider from environment variables
 
         Args:
-            provider (str): Provider name ('openai' or 'gemini')
+            provider (str): Provider name ('openai', 'gemini', 'groq', or 'anthropic')
 
         Returns:
             str: API key or None if not found
@@ -169,7 +169,7 @@ class ConfigManager:
         """Get the configured LLM provider
 
         Returns:
-            str: LLM provider name ('claude', 'openai', or 'gemini')
+            str: LLM provider name ('claude', 'openai', 'gemini', or 'groq')
         """
         # Try environment variable first, then settings.json
         provider = os.getenv('LLM_PROVIDER')
@@ -232,4 +232,15 @@ class ConfigManager:
         model = os.getenv('GEMINI_MODEL')
         if not model:
             model = self.get_setting('llm', 'gemini', 'model', default='gemini-pro')
+        return model
+
+    def get_groq_model(self):
+        """Get the Groq model to use
+
+        Returns:
+            str: Groq model name
+        """
+        model = os.getenv('GROQ_MODEL')
+        if not model:
+            model = self.get_setting('llm', 'groq', 'model', default='llama-3.3-70b-versatile')
         return model
