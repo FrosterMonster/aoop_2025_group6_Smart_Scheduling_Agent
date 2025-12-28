@@ -131,16 +131,23 @@ def find_free_slots_between(start_dt: datetime, end_dt: datetime, busy_periods: 
     return free_slots
 
 
-def plan_week_schedule(service, summary, total_hours, daily_window=(9, 21)):
+def plan_week_schedule(service, summary, total_hours, daily_window=(9, 21), start_from=None):
     """
-    搜尋未來 7 天內的空檔，並避開所有日曆中的忙碌時段
+    搜尋未來 7 天內的空檔，避開所有日曆忙碌時段。
     """
-    calendar_ids = get_all_calendar_ids(service)
-    now = datetime.now()
+    calendar_ids = get_all_calendar_ids(service) # 讀取包含家教、上課等所有日曆
     
-    # 準備 FreeBusy 查詢：一次檢查未來 7 天
-    time_min = now.isoformat() + 'Z'
-    time_max = (now + timedelta(days=7)).isoformat() + 'Z'
+    # --- 關鍵修正 A：處理起始日期 ---
+    if start_from:
+        # 轉換前端傳來的 YYYY-MM-DD，並從該日的 00:00 開始找
+        search_start = datetime.strptime(start_from, '%Y-%m-%d')
+    else:
+        # 如果沒指定，則從現在開始找
+        search_start = datetime.now()
+    
+    # 準備 FreeBusy 查詢：從指定的起始日開始檢查未來 7 天
+    time_min = search_start.astimezone(pytz.utc).isoformat()
+    time_max = (search_start + timedelta(days=7)).astimezone(pytz.utc).isoformat()
     
     body = {
         "timeMin": time_min,
@@ -151,43 +158,45 @@ def plan_week_schedule(service, summary, total_hours, daily_window=(9, 21)):
     # 向 Google 詢問哪些時段是忙碌的
     freebusy_res = service.freebusy().query(body=body).execute()
     
-    # 整合所有日曆的忙碌時段
     all_busy_periods = []
     for cal_id in calendar_ids:
         periods = freebusy_res['calendars'].get(cal_id, {}).get('busy', [])
         all_busy_periods.extend(periods)
     
-    # 這裡簡化邏輯：尋找第一個符合 daily_window 且不衝突的 1 小時空檔
-    # (實際演算法會比這複雜，這邊先提供一個確保能運行的基礎版本)
-    test_start = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+    # --- 關鍵修正 B：搜尋起點設定 ---
+    # 設定測試起點為 search_start 的整點
+    test_start = search_start.replace(minute=0, second=0, microsecond=0)
+    if not start_from: # 如果是今天，則往後推一小時避免排在過去
+        test_start += timedelta(hours=1)
     
-    for _ in range(168): # 檢查未來 168 小時
+    for _ in range(168): 
+        # 檢查是否在允許的每日時間窗內 (9:00 - 21:00)
         if test_start.hour < daily_window[0] or test_start.hour >= daily_window[1]:
             test_start += timedelta(hours=1)
             continue
             
         test_end = test_start + timedelta(hours=total_hours)
         
-        # 檢查是否與任何忙碌時段重疊
+        # 衝突偵測邏輯
         is_conflict = False
         for busy in all_busy_periods:
-            b_start = datetime.fromisoformat(busy['start'].replace('Z', ''))
-            b_end = datetime.fromisoformat(busy['end'].replace('Z', ''))
-            if not (test_end <= b_start or test_start >= b_end):
+            b_start = datetime.fromisoformat(busy['start'].replace('Z', '+00:00'))
+            b_end = datetime.fromisoformat(busy['end'].replace('Z', '+00:00'))
+            # 判斷重疊
+            if not (test_end.astimezone(pytz.utc) <= b_start or test_start.astimezone(pytz.utc) >= b_end):
                 is_conflict = True
                 break
         
         if not is_conflict:
-            # 找到空檔了！回傳格式與你的 web_app 匹配
             return [{
                 'start': test_start,
                 'end': test_end,
-                'result': f"幫你找到了！這個時段避開了你的{len(calendar_ids)}個日曆衝突"
+                'result': f"避開了您的{len(calendar_ids)}個日曆，找到空檔！"
             }]
         
         test_start += timedelta(hours=1)
     
-    raise Exception("抱歉，這週真的排不進去了！")
+    raise Exception("抱歉，這週您的所有日曆都是滿的！")
 # 獨立測試區塊
 if __name__ == '__main__':
     # 計算一個未來時間，例如現在時間的 30 分鐘後到 60 分鐘後
