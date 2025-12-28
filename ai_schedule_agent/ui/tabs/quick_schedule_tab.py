@@ -24,23 +24,27 @@ class QuickScheduleTab:
     def setup_ui(self):
         """Setup quick schedule tab UI"""
 
-        # Natural language input
-        ttk.Label(self.parent, text="Natural Language Input:", font=('Arial', 12)).pack(pady=10)
+        # Natural language input (阿嚕米 style)
+        ttk.Label(self.parent, text="📅 AI 智能排程助手", font=('Arial', 14, 'bold')).pack(pady=10)
+        ttk.Label(self.parent, text="輸入自然語言，系統自動解析並填充表單", font=('Arial', 10), foreground='gray').pack(pady=2)
 
         self.nl_input = ttk.Entry(self.parent, width=80, font=('Arial', 11))
         self.nl_input.pack(pady=5)
         self.nl_input.bind('<Return>', lambda e: self.process_nl_input())
+        self.nl_input.insert(0, "例如：明天下午排3小時開會")
+        self.nl_input.bind('<FocusIn>', lambda e: self.nl_input.delete(0, tk.END) if self.nl_input.get().startswith("例如") else None)
 
         nl_button_frame = ttk.Frame(self.parent)
         nl_button_frame.pack(pady=5)
-        ttk.Button(nl_button_frame, text="Process & Fill Form", command=self.process_nl_input).pack(side='left', padx=5)
-        ttk.Button(nl_button_frame, text="Clear", command=self.clear_nl_input).pack(side='left', padx=5)
+        ttk.Button(nl_button_frame, text="🔍 開始解析", command=self.process_nl_input, style='Accent.TButton').pack(side='left', padx=5)
+        ttk.Button(nl_button_frame, text="清除", command=self.clear_nl_input).pack(side='left', padx=5)
 
         # Separator
         ttk.Separator(self.parent, orient='horizontal').pack(fill='x', pady=20)
 
-        # Detailed form
-        ttk.Label(self.parent, text="Detailed Event Form:", font=('Arial', 12)).pack(pady=10)
+        # Detailed form (阿嚕米 style)
+        ttk.Label(self.parent, text="📋 詳細活動表單", font=('Arial', 12, 'bold')).pack(pady=10)
+        ttk.Label(self.parent, text="（由上方 AI 自動填充，或手動編輯）", font=('Arial', 9), foreground='gray').pack(pady=2)
 
         form_frame = ttk.Frame(self.parent)
         form_frame.pack(pady=10)
@@ -89,13 +93,13 @@ class QuickScheduleTab:
         self.tags_entry = ttk.Entry(form_frame, width=40)
         self.tags_entry.grid(row=len(fields)+3, column=1, padx=5, pady=3)
 
-        # Submit and Clear buttons
+        # Submit and Clear buttons (阿嚕米 style)
         button_frame = ttk.Frame(form_frame)
         button_frame.grid(row=len(fields)+4, column=0, columnspan=2, pady=20)
 
-        ttk.Button(button_frame, text="Schedule Event",
-                  command=self.schedule_event_from_form).pack(side='left', padx=5)
-        ttk.Button(button_frame, text="Clear Form",
+        ttk.Button(button_frame, text="✅ 確認新增至日曆",
+                  command=self.schedule_event_from_form, style='Accent.TButton').pack(side='left', padx=5)
+        ttk.Button(button_frame, text="清除表單",
                   command=self.clear_form).pack(side='left', padx=5)
 
         # Result display
@@ -103,14 +107,20 @@ class QuickScheduleTab:
         self.result_text.pack(pady=10)
 
     def process_nl_input(self):
-        """Process natural language input and populate the form"""
+        """Process natural language input and populate the form (阿嚕米 style)
+
+        This method follows阿嚕米's design:
+        1. Parse natural language using Mock mode patterns
+        2. Auto-fill the form below
+        3. Show suggestion based on flexible/fixed time
+        """
         text = self.nl_input.get()
         if not text:
             return
 
-        self.update_status("Processing natural language input...")
+        self.update_status("🔍 正在解析自然語言...")
 
-        # Parse the input
+        # Parse the input using阿嚕米 Mock mode
         parsed = self.nlp_processor.parse_scheduling_request(text)
 
         # Clear result display
@@ -121,8 +131,8 @@ class QuickScheduleTab:
             # Handle check_schedule action - find optimal slot first
             self._handle_check_schedule_action(parsed)
         elif parsed['action'] == 'create':
-            # Display parsed information
-            self.result_text.insert(tk.END, "✅ Parsed Natural Language Input\n")
+            # Display parsed information (阿嚕米 style)
+            self.result_text.insert(tk.END, "✨ AI 解析結果\n")
             self.result_text.insert(tk.END, "=" * 60 + "\n\n")
 
             # Display parsed fields in a nicer format
@@ -140,9 +150,26 @@ class QuickScheduleTab:
                 event_type_str = parsed['event_type'].value if hasattr(parsed['event_type'], 'value') else str(parsed['event_type'])
                 self.result_text.insert(tk.END, f"  🏷️  Type: {event_type_str}\n")
 
+            # Determine if this is flexible or fixed time (阿嚕米 logic)
+            is_flexible = parsed.get('time_preference') is not None and not parsed.get('datetime')
+            has_exact_time = parsed.get('datetime') is not None
+
             self.result_text.insert(tk.END, "\n" + "=" * 60 + "\n")
-            self.result_text.insert(tk.END, "📝 Form populated with parsed data.\n")
-            self.result_text.insert(tk.END, "Please review and click 'Schedule Event' to confirm.\n")
+
+            if is_flexible:
+                # Flexible scheduling (阿嚕米 style message)
+                self.result_text.insert(tk.END, "✨ AI 建議：系統將自動避開衝突，為您找尋最佳空檔。\n")
+                self.result_text.insert(tk.END, f"   時段偏好：{parsed['time_preference'].get('period', 'N/A')}\n")
+                self.is_flexible_var.set(True)
+            elif has_exact_time:
+                # Fixed time (阿嚕米 style message)
+                self.result_text.insert(tk.END, "📍 AI 建議：此為固定行程，將排定於指定時間。\n")
+                self.is_flexible_var.set(False)
+            else:
+                # General case
+                self.result_text.insert(tk.END, "📝 表單已填充，請檢查後點擊「Schedule Event」確認。\n")
+
+            self.result_text.insert(tk.END, "\n下方表單已自動填充，請檢查後提交。\n")
 
             # Clear existing form data
             for entry in self.form_entries.values():
