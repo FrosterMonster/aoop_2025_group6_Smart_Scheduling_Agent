@@ -7,7 +7,7 @@ Fluent Design System principles.
 import tkinter as tk
 from tkinter import ttk
 from typing import Callable, Optional, Any
-from ai_schedule_agent.ui.fluent_theme import FluentTheme
+from ai_schedule_agent.ui.enterprise_theme import EnterpriseTheme
 
 
 class FluentComponent:
@@ -125,14 +125,14 @@ class FluentButton(FluentComponent):
 
     def _setup_component(self, **kwargs):
         """Setup button structure"""
-        # Determine button style based on variant
+        # Determine button style based on variant (Enterprise theme)
         style_map = {
-            'primary': 'Primary.TButton',
-            'secondary': 'Secondary.TButton',
-            'accent': 'Accent.TButton',
-            'subtle': 'Subtle.TButton',
+            'primary': 'Enterprise.Primary.TButton',
+            'secondary': 'Enterprise.Secondary.TButton',
+            'accent': 'Enterprise.Secondary.TButton',  # Map to secondary
+            'subtle': 'Enterprise.Ghost.TButton',
         }
-        button_style = style_map.get(self.variant, 'Primary.TButton')
+        button_style = style_map.get(self.variant, 'Enterprise.Primary.TButton')
 
         # Create button text with icon
         display_text = f"{self.icon} {self.text}".strip()
@@ -232,55 +232,44 @@ class FluentCard(FluentComponent):
             parent: Parent widget
             title: Optional card title
             elevation: Elevation level (0-4)
-            padding: Internal padding (default: FluentTheme.SPACING['lg'])
+            padding: Internal padding (default: EnterpriseTheme.SPACING['lg'])
             **kwargs: Additional options
         """
         self.title = title
         self.elevation = max(0, min(4, elevation))
-        self.padding = padding if padding is not None else FluentTheme.SPACING['lg']
+        self.padding = padding if padding is not None else EnterpriseTheme.SPACING['lg']
 
         super().__init__(parent, **kwargs)
 
     def _setup_component(self, **kwargs):
-        """Setup card structure with rounded appearance"""
-        # Configure card frame with elevation
-        bg_color = FluentTheme.get_elevation_color(self.elevation)
-        self.frame.configure(style='FluentCard.TFrame')
+        """Setup card structure with clean Enterprise styling"""
+        # Enterprise theme: clean white card with subtle border
+        bg_color = EnterpriseTheme.BACKGROUND['card']
+        self.frame.configure(style='Enterprise.Card.TFrame')
 
-        # Simulate BizLink-style soft shadow (Tkinter limitation)
-        # BizLink uses very subtle, soft shadows: 0 2px 6px rgba(0,0,0,0.06)
-        # We simulate with extremely subtle border
-        shadow_frame = tk.Frame(
-            self.frame,
-            bg='#F0F0F0',  # Extremely subtle shadow simulation
-        )
-        shadow_frame.pack(fill='both', expand=True, padx=0, pady=0)
-
-        # Card container - pure white like BizLink
+        # Card container - pure white with subtle 1px border
         self.card_container = tk.Frame(
-            shadow_frame,
+            self.frame,
             bg=bg_color,
-            highlightbackground='#E8E8E8',  # Very light border
+            highlightbackground=EnterpriseTheme.BORDER['default'],  # Subtle border
             highlightthickness=1
         )
-        self.card_container.pack(fill='both', expand=True, padx=1, pady=2)  # More vertical offset for shadow effect
+        self.card_container.pack(fill='both', expand=True)
 
         # Header (optional)
         if self.title:
             self.header = tk.Frame(
                 self.card_container,
-                bg=bg_color,
-                height=FluentTheme.SPACING['huge']
+                bg=bg_color
             )
-            self.header.pack(fill='x', padx=self.padding, pady=(self.padding, 0))
-            self.header.pack_propagate(False)
+            self.header.pack(fill='x', padx=self.padding, pady=(self.padding, EnterpriseTheme.SPACING['sm']))
 
-            # BizLink-style card title: clean, semi-bold, ~14-16px
+            # Enterprise theme card title: clean, bold
             self.title_label = tk.Label(
                 self.header,
                 text=self.title,
-                font=('Segoe UI', 15, 'bold'),  # BizLink card title
-                fg=FluentTheme.NEUTRAL['gray160'],
+                font=(EnterpriseTheme.get_font_family(), EnterpriseTheme.TYPE_SCALE['h2'], 'bold'),
+                fg=EnterpriseTheme.TEXT['primary'],
                 bg=bg_color
             )
             self.title_label.pack(side='left', anchor='w')
@@ -307,17 +296,15 @@ class FluentCard(FluentComponent):
         """
         if not self.title:
             # Create header if it doesn't exist
-            bg_color = FluentTheme.get_elevation_color(self.elevation)
+            bg_color = EnterpriseTheme.BACKGROUND['card']
             self.header = tk.Frame(
                 self.card_container,
-                bg=bg_color,
-                height=FluentTheme.SPACING['huge']
+                bg=bg_color
             )
-            self.header.pack(fill='x', padx=self.padding, pady=(self.padding, 0), before=self.body)
-            self.header.pack_propagate(False)
+            self.header.pack(fill='x', padx=self.padding, pady=(self.padding, EnterpriseTheme.SPACING['sm']), before=self.body)
 
         action_btn = FluentButton(self.header, text=text, variant='subtle', command=command)
-        action_btn.pack(side='right', padx=FluentTheme.SPACING['xs'])
+        action_btn.pack(side='right', padx=EnterpriseTheme.SPACING['xs'])
         return action_btn
 
     def add_footer(self):
@@ -327,14 +314,12 @@ class FluentCard(FluentComponent):
             Footer frame for adding actions
         """
         if not self.footer:
-            bg_color = FluentTheme.get_elevation_color(self.elevation)
+            bg_color = EnterpriseTheme.BACKGROUND['card']
             self.footer = tk.Frame(
                 self.card_container,
-                bg=bg_color,
-                height=FluentTheme.SPACING['huge']
+                bg=bg_color
             )
-            self.footer.pack(fill='x', padx=self.padding, pady=(0, self.padding))
-            self.footer.pack_propagate(False)
+            self.footer.pack(fill='x', padx=self.padding, pady=(EnterpriseTheme.SPACING['sm'], self.padding))
 
         return self.footer
 
@@ -381,7 +366,7 @@ class FluentInput(FluentComponent):
         """Setup input structure"""
         # Label
         label_frame = ttk.Frame(self.frame)
-        label_frame.pack(fill='x', pady=(0, FluentTheme.SPACING['xs']))
+        label_frame.pack(fill='x', pady=(0, EnterpriseTheme.SPACING['xs']))
 
         if self.label_text:
             self.label = ttk.Label(
@@ -395,14 +380,14 @@ class FluentInput(FluentComponent):
                 required_label = ttk.Label(
                     label_frame,
                     text=" *",
-                    foreground=FluentTheme.SEMANTIC['error']
+                    foreground=EnterpriseTheme.SEMANTIC['error']
                 )
                 required_label.pack(side='left')
 
-        # Entry field
+        # Entry field (Enterprise theme)
         self.entry = ttk.Entry(
             self.frame,
-            style='Fluent.TEntry',
+            style='Enterprise.TEntry',
             **kwargs
         )
         self.entry.pack(fill='x')
@@ -410,16 +395,16 @@ class FluentInput(FluentComponent):
         # Set placeholder
         if self.placeholder:
             self.entry.insert(0, self.placeholder)
-            self.entry.configure(foreground=FluentTheme.NEUTRAL['gray90'])
+            self.entry.configure(foreground=EnterpriseTheme.NEUTRAL['gray90'])
 
         # Helper/error text
         self.helper_label = ttk.Label(
             self.frame,
             text="",
             style='Caption.TLabel',
-            foreground=FluentTheme.NEUTRAL['gray110']
+            foreground=EnterpriseTheme.NEUTRAL['gray110']
         )
-        self.helper_label.pack(fill='x', pady=(FluentTheme.SPACING['xs'], 0))
+        self.helper_label.pack(fill='x', pady=(EnterpriseTheme.SPACING['xs'], 0))
 
         # Validation state
         self._validation_state = None  # None, 'error', 'success'
@@ -437,7 +422,7 @@ class FluentInput(FluentComponent):
         # Clear placeholder
         if self.entry.get() == self.placeholder:
             self.entry.delete(0, tk.END)
-            self.entry.configure(foreground=FluentTheme.NEUTRAL['gray160'])
+            self.entry.configure(foreground=EnterpriseTheme.NEUTRAL['gray160'])
 
     def _on_focus_out(self, event):
         """Handle focus out"""
@@ -446,7 +431,7 @@ class FluentInput(FluentComponent):
         # Restore placeholder if empty
         if not self.entry.get():
             self.entry.insert(0, self.placeholder)
-            self.entry.configure(foreground=FluentTheme.NEUTRAL['gray90'])
+            self.entry.configure(foreground=EnterpriseTheme.NEUTRAL['gray90'])
 
         # Validate on blur
         self._validate()
@@ -486,7 +471,7 @@ class FluentInput(FluentComponent):
         self._validation_state = 'error'
         self.helper_label.configure(
             text=message,
-            foreground=FluentTheme.SEMANTIC['error']
+            foreground=EnterpriseTheme.SEMANTIC['error']
         )
         # Note: Tkinter ttk.Entry doesn't support easy border color change
         # Would need custom styling or Canvas-based implementation
@@ -505,7 +490,7 @@ class FluentInput(FluentComponent):
         if self._validation_state is None:
             self.helper_label.configure(
                 text=text,
-                foreground=FluentTheme.NEUTRAL['gray110']
+                foreground=EnterpriseTheme.NEUTRAL['gray110']
             )
 
     def get_value(self) -> str:
@@ -525,7 +510,7 @@ class FluentInput(FluentComponent):
         """
         self.entry.delete(0, tk.END)
         self.entry.insert(0, value)
-        self.entry.configure(foreground=FluentTheme.NEUTRAL['gray160'])
+        self.entry.configure(foreground=EnterpriseTheme.NEUTRAL['gray160'])
 
     @property
     def on_change(self) -> Optional[Callable]:
@@ -587,7 +572,7 @@ class FluentComboBox(FluentComponent):
                 text=self.label_text,
                 style='BodyStrong.TLabel'
             )
-            self.label.pack(fill='x', pady=(0, FluentTheme.SPACING['xs']))
+            self.label.pack(fill='x', pady=(0, EnterpriseTheme.SPACING['xs']))
 
         # Combobox
         self.var = tk.StringVar(value=self.default)
@@ -596,7 +581,7 @@ class FluentComboBox(FluentComponent):
             textvariable=self.var,
             values=self.values,
             state='readonly' if self.readonly else 'normal',
-            style='Fluent.TCombobox',
+            style='Enterprise.TCombobox',
             **kwargs
         )
         self.combobox.pack(fill='x')

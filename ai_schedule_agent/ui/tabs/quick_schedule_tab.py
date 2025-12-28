@@ -7,7 +7,7 @@ from datetime import timedelta
 
 from ai_schedule_agent.models.event import Event
 from ai_schedule_agent.models.enums import EventType, Priority
-from ai_schedule_agent.ui.fluent_theme import FluentTheme
+from ai_schedule_agent.ui.enterprise_theme import EnterpriseTheme
 from ai_schedule_agent.ui.components.base import FluentCard
 
 
@@ -29,7 +29,7 @@ class QuickScheduleTab:
         # Background color is handled by theme
 
         # Main container with padding
-        main_container = tk.Frame(self.parent, bg=FluentTheme.NEUTRAL['gray10'])
+        main_container = tk.Frame(self.parent, bg=EnterpriseTheme.BACKGROUND['app'])
         main_container.pack(fill='both', expand=True, padx=20, pady=20)
 
         # === CARD 1: Natural Language Input ===
@@ -41,8 +41,8 @@ class QuickScheduleTab:
             nl_card.body,
             text="Enter natural language - the system will automatically parse and fill the form",
             font=('Segoe UI', 12),  # BizLink subtitle font
-            fg=FluentTheme.NEUTRAL['gray100'],  # Lighter gray like BizLink
-            bg=FluentTheme.ELEVATION['layer1']
+            fg=EnterpriseTheme.TEXT['secondary'],  # Lighter gray like BizLink
+            bg=EnterpriseTheme.BACKGROUND['card']
         )
         subtitle.pack(pady=(0, 12))
 
@@ -60,7 +60,7 @@ class QuickScheduleTab:
             pass
 
         # Buttons
-        nl_button_frame = tk.Frame(nl_card.body, bg=FluentTheme.ELEVATION['layer1'])
+        nl_button_frame = tk.Frame(nl_card.body, bg=EnterpriseTheme.BACKGROUND['card'])
         nl_button_frame.pack(pady=(10, 0))
         ttk.Button(nl_button_frame, text="🔍 Parse", command=self.process_nl_input, style='Accent.TButton').pack(side='left', padx=5)
         ttk.Button(nl_button_frame, text="Clear", command=self.clear_nl_input).pack(side='left', padx=5)
@@ -74,13 +74,13 @@ class QuickScheduleTab:
             form_card.body,
             text="Auto-filled by AI above, or edit manually",
             font=('Segoe UI', 12),
-            fg=FluentTheme.NEUTRAL['gray100'],
-            bg=FluentTheme.ELEVATION['layer1']
+            fg=EnterpriseTheme.TEXT['secondary'],
+            bg=EnterpriseTheme.BACKGROUND['card']
         )
         form_subtitle.pack(pady=(0, 12))
 
         # Form fields container
-        form_frame = tk.Frame(form_card.body, bg=FluentTheme.ELEVATION['layer1'])
+        form_frame = tk.Frame(form_card.body, bg=EnterpriseTheme.BACKGROUND['card'])
         form_frame.pack(fill='both', expand=True)
 
         # Event details
@@ -128,7 +128,7 @@ class QuickScheduleTab:
         self.tags_entry.grid(row=len(fields)+3, column=1, padx=5, pady=3)
 
         # Submit and Clear buttons
-        button_frame = tk.Frame(form_frame, bg=FluentTheme.ELEVATION['layer1'])
+        button_frame = tk.Frame(form_frame, bg=EnterpriseTheme.BACKGROUND['card'])
         button_frame.grid(row=len(fields)+4, column=0, columnspan=2, pady=20)
 
         self.schedule_btn = ttk.Button(button_frame, text="✅ Add to Calendar",
@@ -151,8 +151,8 @@ class QuickScheduleTab:
             result_card.body,
             height=8,
             font=('Consolas', 10),
-            bg=FluentTheme.NEUTRAL['gray20'],
-            fg=FluentTheme.NEUTRAL['gray160'],
+            bg=EnterpriseTheme.BACKGROUND['hover'],
+            fg=EnterpriseTheme.TEXT['primary'],
             relief='flat',
             borderwidth=0
         )

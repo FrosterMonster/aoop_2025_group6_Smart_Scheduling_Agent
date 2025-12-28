@@ -139,6 +139,14 @@ class EnterpriseTheme:
         'lg': 24,                     # Large spacing
         'xl': 32,                     # Extra large
         'xxl': 48,                    # Section spacing
+        'huge': 40,                   # For compatibility
+    }
+
+    # For compatibility with FluentTheme (maps to TEXT colors)
+    NEUTRAL = {
+        'gray90': '#ADB5BD',          # Maps to placeholder
+        'gray110': '#6C757D',         # Maps to tertiary
+        'gray160': '#212529',         # Maps to primary
     }
 
     # ============================================================================
@@ -195,6 +203,19 @@ class EnterpriseTheme:
             event_type.lower(),
             EnterpriseTheme.EVENT_COLORS['other']
         )
+
+    @staticmethod
+    def get_elevation_color(layer: int) -> str:
+        """Get background color for elevation layer (for compatibility)
+
+        Args:
+            layer: Elevation layer (0-4, ignored - all use card color)
+
+        Returns:
+            Hex color code
+        """
+        # Enterprise theme doesn't use elevation layers - everything uses card color
+        return EnterpriseTheme.BACKGROUND['card']
 
     @staticmethod
     def configure_styles(style: ttk.Style, root: tk.Tk):
