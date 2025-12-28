@@ -1,4 +1,3 @@
-# src/tools/calendar.py (Update)
 import datetime
 import json
 from src.tools.base import AgentTool
@@ -7,11 +6,12 @@ from googleapiclient.discovery import build
 
 class CalendarTool(AgentTool):
     def __init__(self):
-        # The description is CRITICAL. It tells the LLM how to use this tool.
+        # We explicitly tell the LLM which actions are valid
         description = (
             "Useful for managing Google Calendar events. "
-            "Input should be a JSON string with keys: 'action', 'summary', 'start_time', 'end_time'. "
-            "start_time and end_time must be in ISO format 'YYYY-MM-DDTHH:MM:SS'."
+            "Input must be a JSON string with keys: 'action', 'summary', 'start_time', 'end_time'. "
+            "Valid actions are: 'create_event', 'list_events'. "
+            "Time format: 'YYYY-MM-DDTHH:MM:SS'."
         )
         super().__init__(name="google_calendar", description=description)
         creds = authenticate_google_calendar()
@@ -22,35 +22,35 @@ class CalendarTool(AgentTool):
         Parses the input string (JSON) and executes the calendar action.
         """
         try:
-            # The LLM might send a JSON string, so we parse it
+            # Handle cases where the LLM sends a dict instead of a JSON string
             if isinstance(params, str):
                 data = json.loads(params)
             else:
                 data = params
             
-            action = data.get("action")
+            # 1. Normalize the action (convert to lower case and strip spaces)
+            raw_action = data.get("action", "").lower().strip()
             
-            if action == "create_event":
+            # 2. Flexible Action Matching (The Fix)
+            # The Agent might guess "create", "add", or "insert". We map them all to _create_event.
+            if raw_action in ["create_event", "create", "add", "insert", "schedule"]:
                 return self._create_event(data.get("summary"), data.get("start_time"), data.get("end_time"))
-            elif action == "list_events":
+            
+            elif raw_action in ["list_events", "list", "get", "show"]:
                 return self._list_events()
+            
             else:
-                return f"Error: Unknown action '{action}'"
+                return f"Error: Unknown action '{raw_action}'. Valid actions are 'create_event' or 'list_events'."
+                
         except Exception as e:
             return f"Error processing calendar request: {e}"
 
-    # ... (Keep _create_event and _list_events from Week 1) ...
-
     def _create_event(self, summary, start_time, end_time):
-        """
-        Basic event creation function[cite: 12, 70].
-        Expected time format: 'YYYY-MM-DDTHH:MM:SS' (ISO format)
-        """
         event = {
             'summary': summary,
             'start': {
                 'dateTime': start_time,
-                'timeZone': 'Asia/Taipei', # Adjust as needed
+                'timeZone': 'Asia/Taipei', # Ensure this matches your locale
             },
             'end': {
                 'dateTime': end_time,
@@ -60,12 +60,11 @@ class CalendarTool(AgentTool):
 
         try:
             event_result = self._service.events().insert(calendarId='primary', body=event).execute()
-            return f"Event created: {event_result.get('htmlLink')}"
+            return f"Success! Event created: {event_result.get('htmlLink')}"
         except Exception as e:
-            return f"An error occurred: {e}"
+            return f"Google API Error: {e}"
 
     def _list_events(self):
-        """Helper to list upcoming 10 events."""
         now = datetime.datetime.utcnow().isoformat() + 'Z'
         events_result = self._service.events().list(
             calendarId='primary', timeMin=now,
