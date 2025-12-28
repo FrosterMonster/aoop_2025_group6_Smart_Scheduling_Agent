@@ -1,11 +1,3 @@
-沒錯，問題就在第 60 行：model="gemini-1.5-pro"。
-
-因為你的帳號目前無法存取 Pro 模型（會跳出 404 錯誤），請將其改回 gemini-1.5-flash。
-
-請直接將 src/agent/scheduling_agent.py 修改為以下內容（我已經幫你改好模型名稱了）：
-
-Python
-
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.tools import Tool
 from langchain.agents import create_react_agent, AgentExecutor
