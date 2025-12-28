@@ -8,6 +8,8 @@ from calendar_tools import plan_week_schedule, get_calendar_service
 from calendar_service import TOKEN_FILE
 from calendar_time_parser import parse_with_ai  # 這是 AI 解析的核心
 
+from datetime import datetime, timedelta
+
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
 
@@ -53,37 +55,58 @@ def api_parse_nl():
 @app.route('/schedule', methods=['POST'])
 @login_required
 def schedule():
-    summary = request.form['summary']
-    hours = float(request.form['hours'])
-    start_time = request.form.get('start_time') # 拿到 21:00
-    recurrence = request.form.get('recurrence') # 拿到 DAILY
-    
+    summary = request.form.get('summary')
+    hours = float(request.form.get('hours', 1.0))
+    is_flexible = request.form.get('is_flexible') == 'true'
+    start_time_str = request.form.get('start_time')
+    recurrence = request.form.get('recurrence')
+
     try:
         service = get_calendar_service()
         
-        # 這裡需要修改你的 calendar_tools.py 或是直接在這邊呼叫 Google API
-        # 如果有 start_time，就建立固定時間的行程
-        # 如果沒有，才跑 plan_week_schedule 找空檔
-        
-        # 範例：簡單處理固定時間與重複
-        event = {
-            'summary': summary,
-            'start': {
-                'dateTime': f'2025-12-28T{start_time}:00', # 這裡日期要處理，可用 datetime.now()
-                'timeZone': 'Asia/Taipei',
-            },
-            'end': {
-                'dateTime': f'2025-12-28T22:00:00', # 計算結束時間
-                'timeZone': 'Asia/Taipei',
-            }
-        }
-        
-        if recurrence == 'DAILY':
-            event['recurrence'] = ['RRULE:FREQ=DAILY']
+        # --- 模式 A: 彈性找空檔 ---
+        if is_flexible:
+            # 1. 先找出空檔 (回傳 list)
+            planned_events = plan_week_schedule(service, summary, hours)
             
-        service.events().insert(calendarId='primary', body=event).execute()
-        return render_template('schedule.html', success=True)
-        
+            # 2. 關鍵修正：將找到的空檔正式「寫入」Google 日曆
+            if planned_events:
+                for p in planned_events:
+                    event_body = {
+                        'summary': summary,
+                        'start': {'dateTime': p['start'].isoformat(), 'timeZone': 'Asia/Taipei'},
+                        'end': {'dateTime': p['end'].isoformat(), 'timeZone': 'Asia/Taipei'},
+                        'description': 'AI 自動尋找空檔排入'
+                    }
+                    service.events().insert(calendarId='primary', body=event_body).execute()
+                
+                # 為了讓前端顯示正確時間，我們格式化一下顯示字串
+                for p in planned_events:
+                    p['time'] = p['start'].strftime('%Y-%m-%d %H:%M')
+                
+                return render_template('schedule.html', success=True, events=planned_events)
+            else:
+                return render_template('schedule.html', error="找不到合適的空檔")
+
+        # --- 模式 B: 固定時間 ---
+        else:
+            # (這部分你原本應該已經成功了，保持原樣即可)
+            today_str = datetime.now().strftime('%Y-%m-%d')
+            start_dt = datetime.strptime(f"{today_str} {start_time_str}", '%Y-%m-%d %H:%M')
+            end_dt = start_dt + timedelta(hours=hours)
+
+            event_body = {
+                'summary': summary,
+                'start': {'dateTime': start_dt.isoformat(), 'timeZone': 'Asia/Taipei'},
+                'end': {'dateTime': end_dt.isoformat(), 'timeZone': 'Asia/Taipei'},
+            }
+            if recurrence == 'DAILY':
+                event_body['recurrence'] = ['RRULE:FREQ=DAILY']
+
+            service.events().insert(calendarId='primary', body=event_body).execute()
+            return render_template('schedule.html', success=True, 
+                                   events=[{'time': f"{start_time_str}", 'result': '固定行程已新增'}])
+
     except Exception as e:
         return render_template('schedule.html', error=str(e))
 if __name__ == '__main__':
