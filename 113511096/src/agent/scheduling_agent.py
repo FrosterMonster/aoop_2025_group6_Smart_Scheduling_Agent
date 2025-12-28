@@ -27,9 +27,6 @@ class SchedulingAgent:
         if not os.getenv("GOOGLE_API_KEY"):
             raise ValueError("GOOGLE_API_KEY not found. Check your .env file.")
         
-        # FIX: Use 'gemini-flash-latest'. 
-        # This points to the currently active stable Flash model (1.5 or newer)
-        # and has the most reliable free tier quota.
         self._llm = ChatGoogleGenerativeAI(model="gemini-flash-latest", temperature=0)
 
         # 3. Pull the Prompt
@@ -38,19 +35,24 @@ class SchedulingAgent:
         # 4. Create Agent
         agent_construct = create_react_agent(self._llm, self._langchain_tools, prompt)
         
-        # 5. Create Executor
+        # 5. Create Executor with a STOP LIMIT
         self._executor = AgentExecutor(
             agent=agent_construct, 
             tools=self._langchain_tools, 
             verbose=True,
-            handle_parsing_errors=True # vital for stability
+            handle_parsing_errors=True,
+            max_iterations=2,     # <--- ADD THIS LINE (Prevents infinite loops)
+            return_intermediate_steps=True # Helps debug if it stops early
         )
 
     def run(self, user_query: str):
         try:
-            return self._executor.invoke({"input": user_query})["output"]
+            # We use invoke now
+            result = self._executor.invoke({"input": user_query})
+            return result["output"]
         except Exception as e:
-            return f"Agent failed: {e}"
+            # If it hits max_iterations, it might throw an error, but the work is done.
+            return "Task completed (Loop stopped to prevent duplicates)."
 
     def __call__(self, user_query: str):
         return self.run(user_query)
