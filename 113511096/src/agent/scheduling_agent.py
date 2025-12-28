@@ -1,6 +1,7 @@
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain.agents import initialize_agent, AgentType
 from langchain_core.tools import Tool
+from langchain.agents import create_react_agent, AgentExecutor
+from langchain import hub
 from src.tools.base import AgentTool
 import os
 
@@ -22,26 +23,27 @@ class SchedulingAgent:
             for tool in tools
         ]
 
-        # 2. Initialize Gemini
+        # 2. Initialize Gemini 
+        # We use the modern 'gemini-1.5-flash' model
         if not os.getenv("GOOGLE_API_KEY"):
             raise ValueError("GOOGLE_API_KEY not found. Check your .env file.")
             
-        # FIX: Use 'gemini-pro' which is fully supported by this library version
-        self._llm = ChatGoogleGenerativeAI(model="gemini-pro", temperature=0)
+        self._llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0)
 
-        # 3. Create the Agent using 'initialize_agent'
-        # This function exists in langchain==0.2.16
-        self._executor = initialize_agent(
-            tools=self._langchain_tools,
-            llm=self._llm,
-            agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
-            verbose=True,
-            handle_parsing_errors=True
-        )
+        # 3. Pull the Prompt from LangChain Hub
+        # This downloads a proven "Reasoning" prompt template
+        prompt = hub.pull("hwchase17/react")
+        
+        # 4. Create Agent (Modern Constructor)
+        agent_construct = create_react_agent(self._llm, self._langchain_tools, prompt)
+        
+        # 5. Create Executor
+        self._executor = AgentExecutor(agent=agent_construct, tools=self._langchain_tools, verbose=True)
 
     def run(self, user_query: str):
         try:
-            return self._executor.run(user_query)
+            # Modern LangChain uses .invoke()
+            return self._executor.invoke({"input": user_query})["output"]
         except Exception as e:
             return f"Agent failed: {e}"
 
