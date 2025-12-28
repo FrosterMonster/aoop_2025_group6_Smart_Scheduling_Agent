@@ -87,6 +87,7 @@ class NLPProcessor:
             Dictionary with parsed scheduling information
         """
         # Try LLM processing first if enabled
+        # LLM handles intelligent time selection and form filling
         if self.use_llm:
             self._ensure_llm_initialized()  # Lazy load LLM on first use
 
@@ -134,7 +135,7 @@ class NLPProcessor:
         # Rule-based processing (original logic)
         logger.info(f"Processing with rule-based NLP: '{text}'")
 
-        # NEW: Try Chinese-specific patterns FIRST (from 阿嚕米)
+        # Try Chinese-specific patterns (from 阿嚕米)
         chinese_result = self._extract_with_chinese_patterns(text)
 
         result = {
@@ -147,7 +148,10 @@ class NLPProcessor:
             'location': None,
             'title': chinese_result.get('title'),  # Prefer Chinese extraction
             'description': None,
-            'llm_mode': False
+            'llm_mode': False,
+            # CRITICAL: Include time preference fields for UI layer
+            'target_date': chinese_result.get('target_date'),  # For time period scheduling
+            'time_preference': chinese_result.get('time_preference')  # afternoon/morning/evening
         }
 
         # Basic keyword extraction
@@ -299,7 +303,11 @@ class NLPProcessor:
         result['title'] = title.strip() if title else 'New Event'
 
         # Log parsing result for debugging
-        logger.info(f"NLP Parse: '{text}' -> {result}")
+        logger.info(f"NLP Parse: '{text}' -> title='{result['title']}', "
+                   f"datetime={result.get('datetime')}, "
+                   f"target_date={result.get('target_date')}, "
+                   f"time_preference={result.get('time_preference')}, "
+                   f"duration={result.get('duration')}")
 
         return result
 
@@ -796,10 +804,18 @@ REASON: Free slot in afternoon, no conflicts, good spacing"""
         if m:
             summary = m.group(1)
         else:
-            # Pattern 2: 安排「...」 or 安排...
-            m2 = re.search(r'[安排排](?:一個|個)?(?:「([^」]+)」|(.+?)(?:小時|，|,|。|$))', text)
-            if m2:
-                summary = m2.group(1) or m2.group(2)
+            # Pattern 2: Extract event name after time/duration info
+            # Examples: "明天下午排3小時開會" -> "開會", "排1小時討論" -> "討論"
+            # Look for text after duration (X小時/X分鐘)
+            duration_pattern = re.search(r'(\d+)\s*(?:小時|分鐘)(.+?)(?:，|,|。|$)', text)
+            if duration_pattern:
+                summary = duration_pattern.group(2).strip()
+            else:
+                # Pattern 3: Look for text after action keywords (安排/排)
+                # But exclude duration numbers
+                action_pattern = re.search(r'[安排排訂預定](?:一個|個)?(?:「([^」]+)」|([^0-9，。]+?)(?:，|,|。|$))', text)
+                if action_pattern:
+                    summary = action_pattern.group(1) or action_pattern.group(2)
 
         if summary:
             result['title'] = summary.strip()
@@ -889,7 +905,9 @@ REASON: Free slot in afternoon, no conflicts, good spacing"""
                                        f"let scheduling engine find optimal slot")
                             break
 
-        logger.debug(f"Chinese pattern extraction complete: {list(result.keys())}")
+        # Log extracted fields for debugging
+        extracted_fields = {k: v for k, v in result.items() if v is not None}
+        logger.info(f"Chinese pattern extraction complete: {extracted_fields}")
         return result
 
     def reset_conversation(self):

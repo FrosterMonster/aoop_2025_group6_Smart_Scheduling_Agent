@@ -336,158 +336,46 @@ class GeminiProvider(BaseLLMProvider):
 
         if tools:
             # Add structured output instructions
-            full_prompt += """Analyze the user's request and respond with structured JSON.
+            full_prompt += """Scheduling assistant. Output ONLY valid JSON, no extra text.
 
-=== QUERY ACTIONS ===
-When user wants to VIEW/CHECK their schedule:
-{
-  "action": "query",
-  "query": {
-    "query_type": "show_schedule" | "find_event" | "check_availability" | "list_events",
-    "time_range": "tomorrow" | "next week" | "Friday afternoon" | "this month",
-    "search_term": "Alex" | "team meeting" | "dentist" (for find_event)
-  },
-  "response": "I'll show you your schedule for [timeframe]."
-}
+RULES:
+1. Output JSON only - no text before/after
+2. "response" < 15 words, "summary" < 5 words
+3. Use user's exact words (e.g., "會議" stays "會議", no "(Meeting)")
+4. Never ask for details, refinement, or clarification
+5. Accept input AS-IS
 
-Examples:
-- "What's on my calendar tomorrow?" -> query (show_schedule, time_range: "tomorrow")
-- "When is my meeting with Alex?" -> query (find_event, search_term: "Alex")
-- "Am I free Friday afternoon?" -> query (check_availability, time_range: "Friday afternoon")
-- "Show me next week" -> query (show_schedule, time_range: "next week")
+Respond with structured JSON only.
 
-=== EDIT ACTIONS ===
-When user wants to MODIFY an existing event:
-{
-  "action": "edit_event",
-  "edit": {
-    "event_identifier": "3pm meeting" | "meeting with Alex" | "tomorrow's standup",
-    "changes": {
-      "new_time": "4pm" (if changing time),
-      "new_duration": "2 hours" (if extending),
-      "new_location": "Zoom" (if changing location),
-      "add_participants": ["alex@email.com"] (if adding people),
-      "remove_participants": ["john@email.com"] (if removing people)
-    }
-  },
-  "response": "I'll update your [event] with the new details."
-}
+=== QUERY ===
+View schedule:
+{"action": "query", "query": {"query_type": "show_schedule", "time_range": "tomorrow"}, "response": "Showing schedule."}
+
+=== EDIT ===
+Modify event:
+{"action": "edit_event", "edit": {"event_identifier": "3pm meeting", "changes": {"new_time": "4pm"}}, "response": "Updated."}
+
+=== DELETE ===
+Cancel event:
+{"action": "delete_event", "delete": {"event_identifier": "3pm meeting"}, "response": "Cancelled."}
+
+=== SCHEDULE ===
+Schedule with time:
+{"action": "schedule_event", "event": {"summary": "會議", "start_time_str": "tomorrow 2pm", "end_time_str": "3 hours"}, "response": "Scheduled."}
+
+REQUIRED: summary, start_time_str (date+time like "tomorrow 2pm"), end_time_str (duration like "3 hours")
 
 Examples:
-- "Move my 3pm meeting to 4pm" -> edit_event (event: "3pm meeting", new_time: "4pm")
-- "Change tomorrow's location to Zoom" -> edit_event (event: "tomorrow's meeting", new_location: "Zoom")
-- "Add Sarah to my 2pm meeting" -> edit_event (event: "2pm meeting", add_participants: ["Sarah"])
-- "Make my lunch meeting 30 minutes longer" -> edit_event (event: "lunch meeting", new_duration: "+30 minutes")
+- "明天下午排3小時開會" -> {"summary": "會議", "start_time_str": "tomorrow 2pm", "end_time_str": "3 hours"}
+- "今天晚上8點討論專案" -> {"summary": "討論專案", "start_time_str": "today 8pm", "end_time_str": "1 hour"}
 
-=== MOVE ACTIONS ===
-When user wants to RESCHEDULE (simpler than edit):
-{
-  "action": "move_event",
-  "move": {
-    "event_identifier": "3pm meeting",
-    "new_time": "tomorrow at 2pm" | "next week same time" | "Friday afternoon"
-  },
-  "response": "I'll move your [event] to [new time]."
-}
-
-Examples:
-- "Reschedule my morning meeting to afternoon" -> move_event
-- "Move everything after 3pm to tomorrow" -> move_event (can be multiple)
-
-=== DELETE ACTIONS ===
-When user wants to CANCEL/REMOVE events:
-{
-  "action": "delete_event",
-  "delete": {
-    "event_identifier": "3pm meeting" | "team standup",
-    "time_range": "Friday afternoon" | "all meetings with John" (for bulk delete)
-  },
-  "response": "I'll cancel your [event]."
-}
-
-Examples:
-- "Cancel my 3pm meeting" -> delete_event (event: "3pm meeting")
-- "Delete tomorrow's team standup" -> delete_event (event: "tomorrow's team standup")
-- "Clear my schedule for Friday afternoon" -> delete_event (time_range: "Friday afternoon")
-- "Remove all meetings with John" -> delete_event (time_range: "all meetings with John")
-
-=== MULTI-SCHEDULE ACTIONS ===
-When user wants to schedule MULTIPLE events at once:
-{
-  "action": "multi_schedule",
-  "multi_events": [
-    {"summary": "Interview 1", "start_time_str": "tomorrow 10am", "end_time_str": "1 hour"},
-    {"summary": "Interview 2", "start_time_str": "tomorrow 2pm", "end_time_str": "1 hour"},
-    {"summary": "Interview 3", "start_time_str": "tomorrow 4pm", "end_time_str": "1 hour"}
-  ],
-  "response": "I'll schedule 3 interviews for you tomorrow."
-}
-
-Examples:
-- "Schedule 3 interviews tomorrow at 10am, 2pm, and 4pm" -> multi_schedule
-- "Block Monday through Wednesday for focus time" -> multi_schedule (3 events)
-
-=== CHECK SCHEDULE THEN BOOK ===
-When user wants to schedule WITHOUT specific time:
-{
-  "action": "check_schedule",
-  "date": "11/7" | "tomorrow" | "next week",
-  "duration": "3 hours" | "4 hrs" | "90 minutes",
-  "event_details": {
-    "summary": "event title",
-    "description": "optional",
-    "location": "optional"
-  },
-  "response": "Let me check your schedule for [date] to find a good time."
-}
-
-Examples:
-- "Schedule 4hr study session on 11/7" -> check_schedule (no specific time)
-- "Need to meet with team sometime" -> check_schedule (vague request)
-- "Block time for project work" -> check_schedule (no specific time)
-
-=== DIRECT SCHEDULING ===
-When scheduling WITH specific time:
-{
-  "action": "schedule_event",
-  "event": {
-    "summary": "clear event title",
-    "start_time_str": "MUST include both date AND time. Examples: 'tomorrow 3pm', 'today 9am', 'Friday 10:00', '2025-11-27 21:00'",
-    "end_time_str": "PREFER duration format: '1 hour', '90 minutes', '3 hours'. Alternative: end time like 'tomorrow 4pm'",
-    "description": "optional details",
-    "location": "optional location or 'Online'",
-    "participants": ["optional@email.com"]
-  },
-  "response": "I've scheduled [event] for [time]."
-}
-
-IMPORTANT RULES:
-1. start_time_str MUST have BOTH date AND time (not just "9pm" - say "today 9pm" or "tomorrow 9pm")
-2. end_time_str should be DURATION when possible ("1 hour", "2 hours", "30 minutes")
-3. If user doesn't specify duration, use "1 hour" for meetings, "30 minutes" for calls
-4. summary must be descriptive (good: "Team Meeting", bad: "Meeting")
-
-Examples:
-✓ "Meeting tomorrow at 2pm" -> start_time_str: "tomorrow 2pm", end_time_str: "1 hour"
-✓ "Call today 9am for 30 minutes" -> start_time_str: "today 9am", end_time_str: "30 minutes"
-✓ "Team lunch Friday noon" -> start_time_str: "Friday 12pm", end_time_str: "1 hour"
-✓ "aoop meeting at 11/20 pm7" -> start_time_str: "2025-11-20 19:00", end_time_str: "1 hour"
-✗ "Meeting at 2pm" -> BAD (missing date - should be "today 2pm" or "tomorrow 2pm")
-
-IMPORTANT: Handle unusual formats:
-- "pm7" or "am9" means "7pm" or "9am"
-- "11/20" means "2025-11-20" (current year)
-- "11/20 pm7" -> "2025-11-20 19:00"
-
-=== CHAT (NON-SCHEDULING) ===
-{
-  "action": "chat",
-  "response": "Your helpful response"
-}
+=== CHAT ===
+Non-scheduling:
+{"action": "chat", "response": "Your response"}
 
 """
 
-        full_prompt += f"User request: {user_message}"
+        full_prompt += f"User request: {user_message}\n\nOUTPUT ONLY JSON:"
 
         # Define response schema for structured output
         response_schema = {
@@ -528,34 +416,34 @@ IMPORTANT: Handle unusual formats:
                     "properties": {
                         "summary": {
                             "type": "string",
-                            "description": "Event title or summary"
+                            "description": "BRIEF event title ONLY (1-5 words max, e.g., '會議', 'Meeting', 'Team Sync'). Use EXACT words from user input. NO long descriptions."
                         },
                         "start_time_str": {
                             "type": "string",
-                            "description": "Event start time"
+                            "description": "Start time with date (e.g., 'tomorrow 2pm', 'today 9am')"
                         },
                         "end_time_str": {
                             "type": "string",
-                            "description": "Event end time or duration"
+                            "description": "Duration (e.g., '3 hours', '30 minutes', '1 hour')"
                         },
                         "description": {
                             "type": "string",
-                            "description": "Optional event description"
+                            "description": "Description (usually null unless user explicitly provides details)"
                         },
                         "location": {
                             "type": "string",
-                            "description": "Optional event location"
+                            "description": "Location (usually null unless user explicitly mentions location)"
                         },
                         "participants": {
                             "type": "array",
                             "items": {"type": "string"},
-                            "description": "Optional participant emails"
+                            "description": "Participant emails (usually empty unless user explicitly mentions people)"
                         }
                     }
                 },
                 "response": {
                     "type": "string",
-                    "description": "Your response message to the user"
+                    "description": "SHORT confirmation (max 10 words, e.g., 'Scheduled.', 'Done.')"
                 },
                 "query": {
                     "type": "object",
@@ -660,19 +548,70 @@ IMPORTANT: Handle unusual formats:
         gemini_schema = self._build_gemini_schema(response_schema)
 
         # Call Gemini API with structured output
+        # IMPORTANT: Use a LOW max_output_tokens to prevent Gemini from generating verbose output
+        # Gemini tends to be very verbose, so we limit it to 200 tokens (enough for concise JSON)
+        gemini_max_tokens = min(200, max_tokens)  # Force low limit for Gemini
         generation_config = genai.GenerationConfig(
             response_mime_type="application/json",
             response_schema=gemini_schema,
-            max_output_tokens=max_tokens
+            max_output_tokens=gemini_max_tokens
         )
+
+        # Configure safety settings to reduce false positives on RECITATION
+        # This is needed because Gemini sometimes incorrectly flags repetitive instructions as copyrighted
+        safety_settings = [
+            {
+                "category": "HARM_CATEGORY_HARASSMENT",
+                "threshold": "BLOCK_NONE"
+            },
+            {
+                "category": "HARM_CATEGORY_HATE_SPEECH",
+                "threshold": "BLOCK_NONE"
+            },
+            {
+                "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                "threshold": "BLOCK_NONE"
+            },
+            {
+                "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+                "threshold": "BLOCK_NONE"
+            }
+        ]
 
         response = self.client.generate_content(
             full_prompt,
-            generation_config=generation_config
+            generation_config=generation_config,
+            safety_settings=safety_settings
         )
 
         # Parse the structured JSON response
         try:
+            # Check if response was blocked by safety filters or hit token limit
+            if hasattr(response, 'candidates') and response.candidates:
+                candidate = response.candidates[0]
+                if hasattr(candidate, 'finish_reason'):
+                    finish_reason = candidate.finish_reason
+                    # finish_reason values: 0=UNSPECIFIED, 1=STOP, 2=MAX_TOKENS, 3=SAFETY, 4=RECITATION, 5=OTHER
+                    if finish_reason == 4:  # RECITATION
+                        logger.warning("Gemini blocked response due to RECITATION safety filter - likely false positive")
+                        logger.warning("This usually happens when the prompt has repetitive instructions")
+                        # Fall back to a simple error message
+                        return {
+                            'content': 'I had trouble processing that request due to a safety filter. Please try rephrasing.',
+                            'tool_calls': [],
+                            'action': 'chat'
+                        }
+                    elif finish_reason == 3:  # SAFETY
+                        logger.warning(f"Gemini blocked response due to SAFETY filter")
+                        return {
+                            'content': 'The request was blocked by a safety filter. Please rephrase your request.',
+                            'tool_calls': [],
+                            'action': 'chat'
+                        }
+                    elif finish_reason == 2:  # MAX_TOKENS
+                        logger.warning(f"Gemini hit max_output_tokens limit - response may be truncated")
+                        logger.warning("This usually means Gemini is being too verbose. Trying to parse anyway...")
+
             # Get the response text
             response_text = response.text if hasattr(response, 'text') else ''
 
@@ -689,6 +628,30 @@ IMPORTANT: Handle unusual formats:
 
             # Try to parse JSON
             structured_data = json.loads(response_text)
+
+            # POST-PROCESSING: Truncate verbose fields (Gemini sometimes ignores length constraints)
+            if 'event' in structured_data:
+                event = structured_data['event']
+                # Truncate summary to max 50 chars (should be < 20, but allow some buffer)
+                if 'summary' in event and event['summary'] and len(event['summary']) > 50:
+                    original_summary = event['summary']
+                    # Try to extract the actual title (first few words before it goes verbose)
+                    truncated = original_summary[:50].split('。')[0].split('，')[0].split(' ')[0]
+                    event['summary'] = truncated
+                    logger.warning(f"Truncated verbose summary from {len(original_summary)} chars to '{truncated}'")
+
+                # Remove description if it's just verbose repetition
+                if 'description' in event and event['description']:
+                    if len(event['description']) > 200:
+                        logger.warning(f"Removing overly verbose description ({len(event['description'])} chars)")
+                        event['description'] = None
+
+            # Truncate response to max 100 chars
+            if 'response' in structured_data and structured_data['response']:
+                if len(structured_data['response']) > 100:
+                    original_response = structured_data['response']
+                    structured_data['response'] = original_response[:100] + "..."
+                    logger.warning(f"Truncated verbose response from {len(original_response)} chars")
 
             result = {
                 'content': structured_data.get('response', ''),
@@ -721,18 +684,59 @@ IMPORTANT: Handle unusual formats:
             logger.error(f"Failed to parse Gemini structured output: {e}")
             logger.error(f"Problematic JSON (first 500 chars): {response.text[:500] if hasattr(response, 'text') else 'N/A'}")
 
-            # Try to extract any useful information from the malformed response
+            # Try to fix malformed JSON (common issue: unterminated string due to hitting max_tokens)
             try:
                 response_text = response.text if hasattr(response, 'text') else ''
 
-                # Check if response contains any indication of what the user wants
-                if 'schedule' in response_text.lower() or 'meeting' in response_text.lower():
-                    return {
-                        'content': 'I understand you want to schedule something, but I had trouble processing the details. Please try rephrasing your request with clear date, time, and title.',
-                        'tool_calls': [],
-                        'action': 'chat'
-                    }
-            except:
+                # Try to fix unterminated strings by closing them
+                if '"summary"' in response_text and response_text.count('"summary":') > 0:
+                    # Find the last complete field before the break
+                    # Try to close any unclosed strings and objects
+                    fixed_json = response_text
+
+                    # Count quotes to see if there's an unclosed string
+                    # If odd number of quotes after "summary":", close it
+                    summary_start = fixed_json.find('"summary": "')
+                    if summary_start != -1:
+                        after_summary = fixed_json[summary_start + 12:]  # After '"summary": "'
+                        # Find where it should end (look for next field or end of object)
+                        # If no closing quote, add one
+                        if after_summary.find('"') == -1 or after_summary.find('"') > 200:
+                            # Truncate at 50 chars and close
+                            end_pos = min(50, len(after_summary))
+                            truncate_at = after_summary[:end_pos].rfind('，')
+                            if truncate_at == -1:
+                                truncate_at = after_summary[:end_pos].rfind(' ')
+                            if truncate_at == -1:
+                                truncate_at = end_pos
+
+                            fixed_json = fixed_json[:summary_start + 12] + after_summary[:truncate_at] + '"}'
+
+                            # Try to parse the fixed JSON
+                            logger.info(f"Attempting to fix malformed JSON by truncating verbose summary")
+                            structured_data = json.loads(fixed_json)
+                            logger.info(f"Successfully parsed fixed JSON! summary='{structured_data.get('event', {}).get('summary')}'")
+
+                            # Process the fixed JSON
+                            result = {
+                                'content': structured_data.get('response', 'Scheduled.'),
+                                'tool_calls': [],
+                                'action': structured_data.get('action', 'schedule_event')
+                            }
+
+                            if structured_data.get('action') == 'schedule_event' and 'event' in structured_data:
+                                result['tool_calls'].append({
+                                    'id': 'gemini_structured_call',
+                                    'type': 'function',
+                                    'function': {
+                                        'name': 'schedule_calendar_event',
+                                        'arguments': json.dumps(structured_data['event'])
+                                    }
+                                })
+
+                            return result
+            except Exception as fix_error:
+                logger.error(f"Failed to fix malformed JSON: {fix_error}")
                 pass
 
             return {
@@ -982,7 +986,17 @@ User: "Coffee chat next Monday 3pm"
 → start_time_str: "next Monday 3pm"
 → end_time_str: "1 hour"
 
-Always confirm the extracted details with the user in your response. Be conversational and friendly."""
+User: "明天下午排3小時開會" (Chinese: schedule 3-hour meeting tomorrow afternoon)
+→ summary: "會議" (Meeting)
+→ start_time_str: "tomorrow 2pm" (or best time in afternoon)
+→ end_time_str: "3 hours"
+
+IMPORTANT BEHAVIOR:
+- When the user provides enough information to create an event, DIRECTLY call the schedule_calendar_event function
+- Do NOT ask for clarification or additional details unless information is truly missing
+- Do NOT ask "what is the topic?" - use the information provided or create a reasonable default
+- Be concise in your response - the user wants the event created immediately
+- Example: "好的，我已為您安排明天下午2點的3小時會議。" (OK, I've scheduled a 3-hour meeting for tomorrow at 2pm.)"""
 
         return system_message
 
