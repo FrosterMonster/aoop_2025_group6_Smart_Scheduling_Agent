@@ -387,15 +387,60 @@ class ModernSchedulerUI:
 
     def create_main_content(self, parent):
         """Create main content area with all original tabs integrated"""
-        # Content container
+        # Content container with a scrollable area to avoid bottom widgets being hidden
         content_container = tk.Frame(parent, bg=ModernTheme.COLORS['bg_primary'])
         content_container.pack(fill='both', expand=True, padx=10, pady=10)
+
+        # Create a canvas + scrollbar so the main content can scroll vertically
+        canvas = tk.Canvas(content_container, bg=ModernTheme.COLORS['bg_primary'], highlightthickness=0)
+        v_scroll = tk.Scrollbar(content_container, orient='vertical', command=canvas.yview)
+        canvas.configure(yscrollcommand=v_scroll.set)
+
+        # Place canvas and scrollbar
+        canvas.pack(side='left', fill='both', expand=True)
+        v_scroll.pack(side='right', fill='y')
+
+        # Inner frame inside canvas which will actually hold the notebook
+        inner_frame = tk.Frame(canvas, bg=ModernTheme.COLORS['bg_primary'])
+
+        # Make the inner_frame a window inside the canvas and keep a reference
+        window_id = canvas.create_window((0, 0), window=inner_frame, anchor='nw')
+
+        # Ensure the canvas scrollregion updates when the inner frame size changes
+        def _on_frame_configure(event):
+            canvas.configure(scrollregion=canvas.bbox('all'))
+
+        inner_frame.bind('<Configure>', _on_frame_configure)
+
+        # When canvas is resized, ensure inner_frame width matches canvas width
+        def _on_canvas_configure(event):
+            try:
+                canvas.itemconfig(window_id, width=event.width)
+            except Exception:
+                pass
+
+        canvas.bind('<Configure>', _on_canvas_configure)
+
+        # Bind mouse wheel scrolling for convenience (only when pointer is over canvas)
+        def _on_mousewheel(event):
+            if event.delta:
+                # Windows / macOS: event.delta is multiples of 120
+                delta = -1 * (event.delta // 120)
+            else:
+                # X11: use Button-4 / Button-5
+                delta = 1 if event.num == 5 else -1
+            canvas.yview_scroll(delta, 'units')
+
+        # Bind to canvas and inner_frame rather than globally
+        canvas.bind_all('<MouseWheel>', _on_mousewheel)
+        canvas.bind_all('<Button-4>', _on_mousewheel)
+        canvas.bind_all('<Button-5>', _on_mousewheel)
 
         # Create notebook (tabbed interface) but hide the tabs - navigation is via sidebar
         style = ttk.Style()
         style.layout('Hidden.TNotebook.Tab', [])  # Hide tab headers
 
-        self.content_notebook = ttk.Notebook(content_container, style='Hidden.TNotebook')
+        self.content_notebook = ttk.Notebook(inner_frame, style='Hidden.TNotebook')
         self.content_notebook.pack(fill='both', expand=True)
 
         # === Tab 1: Quick Schedule ===

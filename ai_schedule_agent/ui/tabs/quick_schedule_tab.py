@@ -33,6 +33,11 @@ class QuickScheduleTab:
         self.nl_input.bind('<Return>', lambda e: self.process_nl_input())
         self.nl_input.insert(0, "例如：明天下午排3小時開會")
         self.nl_input.bind('<FocusIn>', lambda e: self.nl_input.delete(0, tk.END) if self.nl_input.get().startswith("例如") else None)
+        # Set initial focus to natural language input for faster workflow
+        try:
+            self.nl_input.focus_set()
+        except Exception:
+            pass
 
         nl_button_frame = ttk.Frame(self.parent)
         nl_button_frame.pack(pady=5)
@@ -97,14 +102,34 @@ class QuickScheduleTab:
         button_frame = ttk.Frame(form_frame)
         button_frame.grid(row=len(fields)+4, column=0, columnspan=2, pady=20)
 
-        ttk.Button(button_frame, text="✅ 確認新增至日曆",
-                  command=self.schedule_event_from_form, style='Accent.TButton').pack(side='left', padx=5)
+        self.schedule_btn = ttk.Button(button_frame, text="✅ 確認新增至日曆",
+                                       command=self.schedule_event_from_form, style='Accent.TButton')
+        self.schedule_btn.pack(side='left', padx=5)
+        # Start disabled until required fields (Title) are present
+        try:
+            self.schedule_btn.state(['disabled'])
+        except Exception:
+            pass
         ttk.Button(button_frame, text="清除表單",
                   command=self.clear_form).pack(side='left', padx=5)
 
         # Result display
         self.result_text = scrolledtext.ScrolledText(self.parent, height=8, width=80)
         self.result_text.pack(pady=10)
+
+        # Keyboard shortcut: Ctrl+Enter to submit form quickly
+        try:
+            self.parent.bind_all('<Control-Return>', lambda e: self.schedule_event_from_form())
+        except Exception:
+            pass
+
+        # Enable/disable schedule button based on Title field
+        try:
+            title_entry = self.form_entries.get('title')
+            if title_entry:
+                title_entry.bind('<KeyRelease>', self._on_title_change)
+        except Exception:
+            pass
 
     def process_nl_input(self):
         """Process natural language input and populate the form (阿嚕米 style)
@@ -367,6 +392,10 @@ class QuickScheduleTab:
                     self.result_text.insert(tk.END, "\n✅ No conflicts detected.\n")
 
         self.update_status("Form populated - review and click 'Schedule Event'")
+        try:
+            self.result_text.see(tk.END)
+        except Exception:
+            pass
 
     def _handle_check_schedule_action(self, parsed):
         """Handle check_schedule action by finding optimal slot and populating form"""
@@ -511,10 +540,19 @@ class QuickScheduleTab:
     def schedule_event_from_form(self):
         """Schedule event from detailed form"""
         try:
+            # Disable schedule button to prevent double submissions
+            try:
+                self.schedule_btn.state(['disabled'])
+            except Exception:
+                pass
             # Collect form data
             title = self.form_entries['title'].get()
             if not title:
                 messagebox.showerror("Error", "Title is required")
+                try:
+                    self.schedule_btn.state(['!disabled'])
+                except Exception:
+                    pass
                 return
 
             # Parse date and time
@@ -577,6 +615,14 @@ class QuickScheduleTab:
             for entry in self.form_entries.values():
                 entry.delete(0, tk.END)
             self.tags_entry.delete(0, tk.END)
+            try:
+                self.result_text.see(tk.END)
+            except Exception:
+                pass
+            try:
+                self.schedule_btn.state(['!disabled'])
+            except Exception:
+                pass
 
         except Exception as e:
             messagebox.showerror("Error", str(e))
@@ -584,6 +630,10 @@ class QuickScheduleTab:
     def display_result(self, message):
         """Display result message"""
         self.result_text.insert(tk.END, f"\n{message}\n")
+        try:
+            self.result_text.see(tk.END)
+        except Exception:
+            pass
 
     def clear_nl_input(self):
         """Clear natural language input field"""
@@ -600,3 +650,18 @@ class QuickScheduleTab:
         self.is_flexible_var.set(True)
         self.result_text.delete(1.0, tk.END)
         self.result_text.insert(tk.END, "✅ Form cleared. Ready for new event.\n")
+        try:
+            self.schedule_btn.state(['disabled'])
+        except Exception:
+            pass
+
+    def _on_title_change(self, event=None):
+        """Enable schedule button only when title is not empty"""
+        try:
+            title = self.form_entries['title'].get().strip()
+            if title:
+                self.schedule_btn.state(['!disabled'])
+            else:
+                self.schedule_btn.state(['disabled'])
+        except Exception:
+            pass
