@@ -249,6 +249,26 @@ def _post_process_and_validate(raw: Dict[str, Any], nl_text: str) -> List[Dict[s
         )
         title = re.sub(r"(有|的)", "", title).strip()
 
+        # ---------- 最終語意清洗（活動本體抽取） ----------
+        # 專門處理：找空時間讀書 / 幫我找時間運動 / 找空檔寫作
+
+        SEMANTIC_CLEAN_PATTERNS = [
+            r"找.*時間",
+            r"找.*空",
+            r"幫我找",
+            r"安排",
+        ]
+
+        for p in SEMANTIC_CLEAN_PATTERNS:
+            title = re.sub(p, "", title)
+
+        title = title.strip()
+
+        # 如果清完只剩一個動詞或空白，保底
+        if not title:
+            title = "未命名活動"
+
+
         # ---------- 活動名稱語意修正（關鍵） ----------
 
         # 常見「調度語意」開頭（不是活動本身）
