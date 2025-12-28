@@ -98,6 +98,17 @@ def _rule_based_fallback(nl_text: str) -> Dict[str, Any]:
         start_time = f"{hour:02d}:{minute:02d}"
         is_flexible = False
 
+    # --- duration 解析（小時） ---
+    duration = 60  # 預設 1 小時
+
+    # 中文數字先轉成阿拉伯數字（兩小時 → 2小時）
+    for zh, num in CHINESE_NUM_MAP.items():
+        nl_text = nl_text.replace(f"{zh}小時", f"{num}小時")
+
+    duration_match = re.search(r'(\d+)\s*小時', nl_text)
+    if duration_match:
+        duration = int(duration_match.group(1)) * 60
+
     return {
         "events": [
             {
@@ -108,7 +119,7 @@ def _rule_based_fallback(nl_text: str) -> Dict[str, Any]:
                 ).strip(),
                 "date": date.strftime("%Y-%m-%d"),
                 "start_time": start_time,
-                "duration": 60,
+                "duration": duration,
                 "is_flexible": is_flexible,
                 "is_recurring": False,
                 "recurrence": None
@@ -207,6 +218,11 @@ def _post_process_and_validate(raw: Dict[str, Any], nl_text: str) -> List[Dict[s
 
         # 時長
         duration = int(ev.get("duration") or 60)
+
+        # 如果 AI 沒抓到「小時語意」，用 fallback 補
+        if "小時" in nl_text:
+            fb = _rule_based_fallback(nl_text)["events"][0]
+            duration = fb.get("duration", duration)
 
         # recurrence
         recurrence = ev.get("recurrence")
