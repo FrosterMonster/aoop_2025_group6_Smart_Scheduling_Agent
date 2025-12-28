@@ -113,15 +113,19 @@ def _rule_based_fallback(nl_text: str) -> Dict[str, Any]:
     duration_match = re.search(r'(\d+)\s*小時', nl_text)
     if duration_match:
         duration = int(duration_match.group(1)) * 60
+    title = re.sub(
+        r"(明天|今天|後天|早上|下午|晚上|上午|中午|凌晨|"
+        r"\d+點|\d+:\d+|"
+        r"[一二兩三四五六七八九十\d]+小時)",
+        "",
+        nl_text
+    )
+    title = re.sub(r"(有|的)", "", title).strip()
 
     return {
         "events": [
             {
-                "title": re.sub(
-                    r"(明天|今天|後天|早上|下午|晚上|上午|中午|凌晨|\d+點|\d+:\d+)", 
-                    "",
-                    nl_text
-                ).strip(),
+                "title": title,
                 "date": date.strftime("%Y-%m-%d"),
                 "start_time": start_time,
                 "duration": duration,
@@ -221,22 +225,24 @@ def _post_process_and_validate(raw: Dict[str, Any], nl_text: str) -> List[Dict[s
         # 時間
         start_time = ev.get("start_time")
 
-        # AI 沒抓到時間，但文字裡有時間 → 用 rule-based 補
+        # ---------- 時間補強 ----------
+        # AI 沒抓到時間，但文字裡有 → 用 fallback 補
         if not start_time:
-            fallback = _rule_based_fallback(nl_text)
-            fb_event = fallback["events"][0]
-            start_time = fb_event.get("start_time")
+            start_time = fallback_event.get("start_time")
 
         has_explicit_time = start_time not in (None, "", "null")
         is_flexible = not has_explicit_time
 
-        # 時長
-        duration = int(ev.get("duration") or 60)
+        # ---------- 時長補強 ----------
+        # AI 給的 duration
+        duration = ev.get("duration")
 
-        # 如果 AI 沒抓到「小時語意」，用 fallback 補
-        if "小時" in nl_text:
-            fb = _rule_based_fallback(nl_text)["events"][0]
-            duration = fb.get("duration", duration)
+        # AI 沒抓到 duration，但文字裡有「小時」 → 用 fallback 補
+        if not duration and "小時" in nl_text:
+            duration = fallback_event.get("duration")
+
+        # 最後防呆
+        duration = int(duration or 60)
 
         # recurrence
         recurrence = ev.get("recurrence")
