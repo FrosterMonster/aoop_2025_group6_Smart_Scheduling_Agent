@@ -1,4 +1,5 @@
 import streamlit as st
+from src.games.dungeon import DungeonGame
 import time
 import pandas as pd
 import datetime
@@ -32,7 +33,7 @@ st.title("🤖 Smart Scheduling Platform")
 st.caption("Enterprise Edition v2.0 | Analytics & AI Integration")
 
 # 建立兩個分頁 (Tabs)
-tab1, tab2 = st.tabs(["💬 AI Chat Agent", "📊 Productivity Dashboard"])
+tab1, tab2, tab3 = st.tabs(["💬 AI Chat Agent", "📊 Productivity Dashboard", "🎮 Debug Dungeon"])
 
 # ==========================================
 # TAB 1: 聊天介面 (原本的功能)
@@ -125,3 +126,74 @@ with tab2:
                     st.text(line.strip())
         except FileNotFoundError:
             st.warning("No logs found yet.")
+            
+with tab3:
+    st.header("🎮 The Debug Dungeon")
+    st.caption("Navigate through the spaghetti code, fix bugs, and deploy to production!")
+
+    # 1. 初始化遊戲
+    if "game" not in st.session_state:
+        st.session_state.game = DungeonGame()
+
+    game = st.session_state.game
+
+    # 2. 顯示狀態列
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Health (HP)", f"{game.hp}%")
+    c2.metric("Project Value", f"${game.gold}")
+    c3.button("🔄 Restart Game", on_click=lambda: st.session_state.pop("game"))
+
+    col_game, col_log = st.columns([2, 1])
+
+    # 3. 遊戲控制區 (左側)
+    with col_game:
+        # 繪製地圖 (用 Emoji 代表)
+        grid_html = "<div style='font-size: 24px; line-height: 24px;'>"
+        for r in range(game.size):
+            row_str = ""
+            for c in range(game.size):
+                if [r, c] == game.player_pos:
+                    row_str += "🤖" # Player
+                elif [r, c] == game.exit_pos:
+                    row_str += "🏁" # Exit
+                elif game.board[r][c] == 0:
+                    row_str += "⬜" # Empty
+                elif game.board[r][c] == 1:
+                    row_str += "⬜" # Hidden Bug (Fog of War style - or change to 👾 to make it easy)
+                elif game.board[r][c] == 2:
+                    row_str += "☕" # Coffee
+                elif game.board[r][c] == 3:
+                    row_str += "💎" # Feature
+            grid_html += f"<div>{row_str}</div>"
+        grid_html += "</div>"
+        
+        st.markdown(grid_html, unsafe_allow_html=True)
+
+        st.divider()
+        
+        # 控制按鈕 (十字鍵佈局)
+        b_col1, b_col2, b_col3 = st.columns([1, 1, 1])
+        with b_col2:
+            if st.button("⬆️ Up", use_container_width=True): game.move("UP")
+        
+        b_col1, b_col2, b_col3 = st.columns([1, 1, 1])
+        with b_col1:
+            if st.button("⬅️ Left", use_container_width=True): game.move("LEFT")
+        with b_col2:
+            if st.button("⬇️ Down", use_container_width=True): game.move("DOWN")
+        with b_col3:
+            if st.button("➡️ Right", use_container_width=True): game.move("RIGHT")
+
+    # 4. 遊戲紀錄區 (右側)
+    with col_log:
+        st.subheader("System Log")
+        log_text = "\n".join(game.log[::-1]) # 反轉順序，最新的在上面
+        st.text_area("Events", log_text, height=300, disabled=True)
+
+    # 5. 結束畫面
+    if game.game_over:
+        if game.won:
+            st.balloons()
+            st.success(f"🎉 MISSION ACCOMPLISHED! You earned ${game.gold} bonus!")
+        else:
+            st.error("💀 MISSION FAILED. You were overwhelmed by bugs.")
