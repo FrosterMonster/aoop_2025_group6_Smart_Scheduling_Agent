@@ -116,6 +116,7 @@ def _rule_based_fallback(nl_text: str) -> Dict[str, Any]:
     title = re.sub(
         r"(明天|今天|後天|早上|下午|晚上|上午|中午|凌晨|"
         r"\d+點|\d+:\d+|"
+        r"[一二兩三四五六七八九十]+點|"
         r"[一二兩三四五六七八九十\d]+小時)",
         "",
         nl_text
@@ -198,9 +199,9 @@ def _post_process_and_validate(raw: Dict[str, Any], nl_text: str) -> List[Dict[s
 
     today = datetime.now().date()
     results = []
+    fallback_event = _rule_based_fallback(nl_text)["events"][0]
 
     for ev in raw["events"]:
-        fallback_event = _rule_based_fallback(nl_text)["events"][0]
 
         raw_title = ev.get("title") or nl_text
 
@@ -208,6 +209,7 @@ def _post_process_and_validate(raw: Dict[str, Any], nl_text: str) -> List[Dict[s
         title = re.sub(
             r"(明天|今天|後天|本週|下週|早上|下午|晚上|上午|中午|凌晨|"
             r"\d+點|\d+:\d+|"
+            r"[一二兩三四五六七八九十]+點|"
             r"[一二兩三四五六七八九十\d]+小時)",
             "",
             raw_title
