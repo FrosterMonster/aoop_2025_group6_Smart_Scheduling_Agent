@@ -19,18 +19,23 @@ def parse_with_ai(nl_time_str: str):
         現在時間：{datetime.now().strftime('%Y-%m-%d %H:%M')}
         指令："{nl_time_str}"
         
-        請將上述指令轉化為 JSON，規則如下：
-        1. title: 提取指令中的主體活動（例如：運動、開會）。
-        2. date: 計算指令中的日期（今天/明天/後天）。
-        3. start_time: 若指令有時間（如五點），轉化為 HH:MM（如 05:00）。
-        4. is_flexible: 指令有具體時間(如:五點) 必須設為 false。
+請將指令轉化為 JSON，規則如下：
+        1. title: 提取活動主體（如：洗澡、運動）。
+        2. date: 計算起始日期（YYYY-MM-DD）。
+        3. start_time: 開始時間（HH:MM）。
+        4. duration: 若指令有結束時間（如九點到十點），請計算分鐘數（此例為 60）。
+        5. is_recurring: 若提到「每天」、「每週」設為 true。
+        6. recurrence: 週期模式，填入 "DAILY" 或 "WEEKLY" 或 null。
+        7. is_flexible: 有具體時間點(如:九點) 必須設為 false。
         
-        僅輸出 JSON 格式：
+        僅輸出 JSON：
         {{
           "title": "活動名稱",
           "date": "YYYY-MM-DD",
           "start_time": "HH:MM",
           "duration": 60,
+          "is_recurring": false,
+          "recurrence": null,
           "is_flexible": false
         }}
         """
