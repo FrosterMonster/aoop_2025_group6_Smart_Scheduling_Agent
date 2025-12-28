@@ -1,3 +1,11 @@
+沒錯，問題就在第 60 行：model="gemini-1.5-pro"。
+
+因為你的帳號目前無法存取 Pro 模型（會跳出 404 錯誤），請將其改回 gemini-1.5-flash。
+
+請直接將 src/agent/scheduling_agent.py 修改為以下內容（我已經幫你改好模型名稱了）：
+
+Python
+
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.tools import Tool
 from langchain.agents import create_react_agent, AgentExecutor
@@ -6,7 +14,6 @@ from src.tools.base import AgentTool
 import os
 
 # --- 定義專屬的「排程大腦」 ---
-# 這裡我們加入了 "IMPORTANT" 規則，強制它在建立行程前先檢查衝突
 CUSTOM_SYSTEM_PROMPT = """
 You are a Smart Scheduling Assistant. Your job is to manage the user's Google Calendar.
 
@@ -57,10 +64,10 @@ class SchedulingAgent:
         if not os.getenv("GOOGLE_API_KEY"):
             raise ValueError("GOOGLE_API_KEY not found. Check your .env file.")
         
-        # 使用 1.5 Pro (或 Flash)
-        self._llm = ChatGoogleGenerativeAI(model="gemini-1.5-pro", temperature=0)
+        # ▼▼▼ 修改這裡：改回 gemini-1.5-flash ▼▼▼
+        self._llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0)
 
-        # --- 變更點：使用我們自定義的 Prompt ---
+        # --- 使用自定義 Prompt ---
         prompt = PromptTemplate.from_template(CUSTOM_SYSTEM_PROMPT)
         
         agent_construct = create_react_agent(self._llm, self._langchain_tools, prompt)
@@ -70,7 +77,7 @@ class SchedulingAgent:
             tools=self._langchain_tools, 
             verbose=True,
             handle_parsing_errors=True,
-            max_iterations=10, # 給它多一點步數去檢查衝突
+            max_iterations=10, 
             return_intermediate_steps=True
         )
 
