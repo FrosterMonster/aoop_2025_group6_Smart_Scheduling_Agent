@@ -1,4 +1,4 @@
-# 阿嚕米（Alumi）
+# AI Scheduling Agent
 
 ### AI 智能全日曆助理（Smart Scheduling Agent）
 
@@ -6,7 +6,7 @@
 
 ## 專案簡介（Introduction）
 
-**阿嚕米（Alumi）** 是一個結合自然語言理解（LLM）、時間解析與 Google Calendar API 的智慧行程助理。
+**AI Scheduling Agent** 是一個結合自然語言理解（LLM）、時間解析與 Google Calendar API 的智慧行程助理。
 使用者可以透過接近日常語言的中文指令（例如：「明天早上十點健身三小時」、「明天找空檔讀書」），由系統自動解析並建立對應的行事曆事件。
 
 本專案特別著重於：
