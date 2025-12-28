@@ -24,38 +24,39 @@ class FluentTheme:
     # COLOR SYSTEM
     # ============================================================================
 
-    # Accent Colors (Primary brand color with variants)
+    # Accent Colors - BizLink uses subtle monochrome accents
     ACCENT = {
-        'default': '#0078D4',      # Fluent Blue
-        'light1': '#1890F1',       # 10% lighter
-        'light2': '#3AA0F3',       # 20% lighter
-        'light3': '#6CB8F6',       # 30% lighter
-        'dark1': '#106EBE',        # 10% darker
-        'dark2': '#005A9E',        # 20% darker
-        'dark3': '#004578',        # 30% darker
+        'default': '#1A1A1A',      # Dark gray/black (BizLink primary)
+        'light1': '#2E2E2E',       # Slightly lighter
+        'light2': '#464646',       # Medium
+        'light3': '#6B6B6B',       # Light gray
+        'dark1': '#121212',        # Darker
+        'dark2': '#0A0A0A',        # Almost black
+        'dark3': '#000000',        # Pure black
+        'blue': '#0078D4',         # Optional blue for special cases
     }
 
-    # Neutral Colors (Gray scale)
+    # Neutral Colors - Matched to BizLink reference
     NEUTRAL = {
-        'gray10': '#FAF9F8',       # Lightest
-        'gray20': '#F3F2F1',
-        'gray30': '#EDEBE9',
-        'gray40': '#E1DFDD',
-        'gray50': '#D2D0CE',
-        'gray60': '#C8C6C4',
-        'gray70': '#BEBBB8',
-        'gray80': '#B3B0AD',
-        'gray90': '#A19F9D',
-        'gray100': '#979593',
-        'gray110': '#8A8886',
-        'gray120': '#797775',
-        'gray130': '#605E5C',      # Default text
-        'gray140': '#484644',
-        'gray150': '#3B3A39',
-        'gray160': '#323130',      # Dark text
-        'gray170': '#292827',
-        'gray180': '#252423',
-        'gray190': '#201F1E',      # Darkest
+        'gray10': '#FAF9F7',       # Warm beige background (BizLink)
+        'gray20': '#F5F4F2',       # Slightly darker warm bg
+        'gray30': '#EFEFEF',       # Light gray
+        'gray40': '#E5E5E5',       # Subtle borders
+        'gray50': '#D4D4D4',
+        'gray60': '#B8B8B8',
+        'gray70': '#A0A0A0',
+        'gray80': '#8A8A8A',
+        'gray90': '#757575',
+        'gray100': '#6B6B6B',      # Secondary text (BizLink)
+        'gray110': '#5F5F5F',
+        'gray120': '#525252',
+        'gray130': '#464646',      # Medium text
+        'gray140': '#3A3A3A',
+        'gray150': '#2E2E2E',
+        'gray160': '#1A1A1A',      # Primary text (BizLink)
+        'gray170': '#121212',
+        'gray180': '#0A0A0A',
+        'gray190': '#000000',      # Pure black
     }
 
     # Semantic Colors
@@ -79,13 +80,13 @@ class FluentTheme:
         'border': '#E5E5E5',       # Acrylic border
     }
 
-    # Depth Layers (Elevation system)
+    # Depth Layers - BizLink elevation system
     ELEVATION = {
-        'layer0': '#FFFFFF',       # Base surface
-        'layer1': '#F9F9F9',       # Resting (2dp)
-        'layer2': '#F6F6F6',       # Hovered (4dp)
-        'layer3': '#F3F3F3',       # Pressed (8dp)
-        'layer4': '#F0F0F0',       # Floating (16dp)
+        'layer0': '#FFFFFF',       # Pure white cards (BizLink)
+        'layer1': '#FFFFFF',       # Card surface
+        'layer2': '#FFFFFF',       # Sidebar WHITE (BizLink sidebar)
+        'layer3': '#F7F7F7',       # Subtle hover
+        'layer4': '#2A2A2A',       # Dark card (BizLink "Prime Estate")
     }
 
     # Event Type Colors (matching consultation types)
@@ -156,25 +157,24 @@ class FluentTheme:
     # EFFECTS SYSTEM
     # ============================================================================
 
-    # Border Radius
+    # Border Radius - BizLink style
     RADIUS = {
         'none': 0,
-        'small': 2,
-        'medium': 4,
-        'large': 6,
-        'xlarge': 8,
-        'circular': 9999,
+        'small': 6,        # Small elements
+        'medium': 8,       # Buttons
+        'large': 12,       # Cards (BizLink)
+        'xlarge': 16,      # Large cards
+        'circular': 9999,  # Pills/avatars
     }
 
-    # Shadows (format: "offset-x offset-y blur color")
+    # Shadows - BizLink soft shadows
     # Note: Tkinter has limited shadow support, these are reference values
     SHADOWS = {
-        'shadow2': {'offset': (0, 1), 'blur': 2, 'color': '#00000014'},    # 2dp
-        'shadow4': {'offset': (0, 2), 'blur': 4, 'color': '#00000028'},    # 4dp
-        'shadow8': {'offset': (0, 4), 'blur': 8, 'color': '#0000003D'},    # 8dp
-        'shadow16': {'offset': (0, 8), 'blur': 16, 'color': '#00000052'},  # 16dp
-        'shadow28': {'offset': (0, 14), 'blur': 28, 'color': '#00000066'}, # 28dp
-        'shadow64': {'offset': (0, 32), 'blur': 64, 'color': '#0000007A'}, # 64dp
+        'card': {'offset': (0, 2), 'blur': 6, 'color': 'rgba(0,0,0,0.06)'},  # BizLink card shadow
+        'card_hover': {'offset': (0, 4), 'blur': 12, 'color': 'rgba(0,0,0,0.08)'}, # Card hover
+        'elevated': {'offset': (0, 6), 'blur': 16, 'color': 'rgba(0,0,0,0.10)'},  # Elevated
+        'modal': {'offset': (0, 12), 'blur': 32, 'color': 'rgba(0,0,0,0.15)'},     # Modals
+        'dark_card': {'offset': (0, 4), 'blur': 20, 'color': 'rgba(0,0,0,0.25)'}, # Dark card
     }
 
     # Border Widths
@@ -311,9 +311,9 @@ class FluentTheme:
                        borderwidth=0)
 
         style.configure('FluentCard.TFrame',
-                       background=FluentTheme.ELEVATION['layer1'],
+                       background=FluentTheme.ELEVATION['layer0'],  # White cards like reference
                        relief='flat',
-                       borderwidth=FluentTheme.BORDERS['thin'])
+                       borderwidth=0)  # No border, shadows provide depth
 
         style.configure('FluentSidebar.TFrame',
                        background=FluentTheme.ELEVATION['layer2'],

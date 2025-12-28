@@ -7,6 +7,8 @@ from datetime import timedelta
 
 from ai_schedule_agent.models.event import Event
 from ai_schedule_agent.models.enums import EventType, Priority
+from ai_schedule_agent.ui.fluent_theme import FluentTheme
+from ai_schedule_agent.ui.components.base import FluentCard
 
 
 class QuickScheduleTab:
@@ -22,37 +24,64 @@ class QuickScheduleTab:
         self.setup_ui()
 
     def setup_ui(self):
-        """Setup quick schedule tab UI"""
+        """Setup quick schedule tab UI with Fluent Design"""
+        # Note: parent is ttk.Frame, can't set bg directly
+        # Background color is handled by theme
 
-        # Natural language input (阿嚕米 style)
-        ttk.Label(self.parent, text="📅 AI 智能排程助手", font=('Arial', 14, 'bold')).pack(pady=10)
-        ttk.Label(self.parent, text="輸入自然語言，系統自動解析並填充表單", font=('Arial', 10), foreground='gray').pack(pady=2)
+        # Main container with padding
+        main_container = tk.Frame(self.parent, bg=FluentTheme.NEUTRAL['gray10'])
+        main_container.pack(fill='both', expand=True, padx=20, pady=20)
 
-        self.nl_input = ttk.Entry(self.parent, width=80, font=('Arial', 11))
-        self.nl_input.pack(pady=5)
+        # === CARD 1: Natural Language Input ===
+        nl_card = FluentCard(main_container, title="AI Smart Scheduler", padding=20)
+        nl_card.pack(fill='x', pady=(0, 20))
+
+        # BizLink-style subtitle: smaller, lighter gray
+        subtitle = tk.Label(
+            nl_card.body,
+            text="Enter natural language - the system will automatically parse and fill the form",
+            font=('Segoe UI', 12),  # BizLink subtitle font
+            fg=FluentTheme.NEUTRAL['gray100'],  # Lighter gray like BizLink
+            bg=FluentTheme.ELEVATION['layer1']
+        )
+        subtitle.pack(pady=(0, 12))
+
+        # NL Input field
+        self.nl_input = ttk.Entry(nl_card.body, width=80, font=('Microsoft YaHei', 11))
+        self.nl_input.pack(pady=5, fill='x')
         self.nl_input.bind('<Return>', lambda e: self.process_nl_input())
-        self.nl_input.insert(0, "例如：明天下午排3小時開會")
-        self.nl_input.bind('<FocusIn>', lambda e: self.nl_input.delete(0, tk.END) if self.nl_input.get().startswith("例如") else None)
-        # Set initial focus to natural language input for faster workflow
+        self.nl_input.insert(0, "Example: Schedule 3-hour meeting tomorrow afternoon")
+        self.nl_input.bind('<FocusIn>', lambda e: self.nl_input.delete(0, tk.END) if self.nl_input.get().startswith("Example") else None)
+
+        # Set initial focus
         try:
             self.nl_input.focus_set()
         except Exception:
             pass
 
-        nl_button_frame = ttk.Frame(self.parent)
-        nl_button_frame.pack(pady=5)
-        ttk.Button(nl_button_frame, text="🔍 開始解析", command=self.process_nl_input, style='Accent.TButton').pack(side='left', padx=5)
-        ttk.Button(nl_button_frame, text="清除", command=self.clear_nl_input).pack(side='left', padx=5)
+        # Buttons
+        nl_button_frame = tk.Frame(nl_card.body, bg=FluentTheme.ELEVATION['layer1'])
+        nl_button_frame.pack(pady=(10, 0))
+        ttk.Button(nl_button_frame, text="🔍 Parse", command=self.process_nl_input, style='Accent.TButton').pack(side='left', padx=5)
+        ttk.Button(nl_button_frame, text="Clear", command=self.clear_nl_input).pack(side='left', padx=5)
 
-        # Separator
-        ttk.Separator(self.parent, orient='horizontal').pack(fill='x', pady=20)
+        # === CARD 2: Event Details Form ===
+        form_card = FluentCard(main_container, title="Event Details", padding=20)
+        form_card.pack(fill='both', expand=True, pady=(0, 20))
 
-        # Detailed form (阿嚕米 style)
-        ttk.Label(self.parent, text="📋 詳細活動表單", font=('Arial', 12, 'bold')).pack(pady=10)
-        ttk.Label(self.parent, text="（由上方 AI 自動填充，或手動編輯）", font=('Arial', 9), foreground='gray').pack(pady=2)
+        # BizLink-style form subtitle
+        form_subtitle = tk.Label(
+            form_card.body,
+            text="Auto-filled by AI above, or edit manually",
+            font=('Segoe UI', 12),
+            fg=FluentTheme.NEUTRAL['gray100'],
+            bg=FluentTheme.ELEVATION['layer1']
+        )
+        form_subtitle.pack(pady=(0, 12))
 
-        form_frame = ttk.Frame(self.parent)
-        form_frame.pack(pady=10)
+        # Form fields container
+        form_frame = tk.Frame(form_card.body, bg=FluentTheme.ELEVATION['layer1'])
+        form_frame.pack(fill='both', expand=True)
 
         # Event details
         fields = [
@@ -98,11 +127,11 @@ class QuickScheduleTab:
         self.tags_entry = ttk.Entry(form_frame, width=40)
         self.tags_entry.grid(row=len(fields)+3, column=1, padx=5, pady=3)
 
-        # Submit and Clear buttons (阿嚕米 style)
-        button_frame = ttk.Frame(form_frame)
+        # Submit and Clear buttons
+        button_frame = tk.Frame(form_frame, bg=FluentTheme.ELEVATION['layer1'])
         button_frame.grid(row=len(fields)+4, column=0, columnspan=2, pady=20)
 
-        self.schedule_btn = ttk.Button(button_frame, text="✅ 確認新增至日曆",
+        self.schedule_btn = ttk.Button(button_frame, text="✅ Add to Calendar",
                                        command=self.schedule_event_from_form, style='Accent.TButton')
         self.schedule_btn.pack(side='left', padx=5)
         # Start disabled until required fields (Title) are present
@@ -110,12 +139,24 @@ class QuickScheduleTab:
             self.schedule_btn.state(['disabled'])
         except Exception:
             pass
-        ttk.Button(button_frame, text="清除表單",
+        ttk.Button(button_frame, text="Clear Form",
                   command=self.clear_form).pack(side='left', padx=5)
 
+        # === CARD 3: Result Display ===
+        result_card = FluentCard(main_container, title="AI Response", padding=20)
+        result_card.pack(fill='both', expand=True)
+
         # Result display
-        self.result_text = scrolledtext.ScrolledText(self.parent, height=8, width=80)
-        self.result_text.pack(pady=10)
+        self.result_text = scrolledtext.ScrolledText(
+            result_card.body,
+            height=8,
+            font=('Consolas', 10),
+            bg=FluentTheme.NEUTRAL['gray20'],
+            fg=FluentTheme.NEUTRAL['gray160'],
+            relief='flat',
+            borderwidth=0
+        )
+        self.result_text.pack(fill='both', expand=True)
 
         # Keyboard shortcut: Ctrl+Enter to submit form quickly
         try:

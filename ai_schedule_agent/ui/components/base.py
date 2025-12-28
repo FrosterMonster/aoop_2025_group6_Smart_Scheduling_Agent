@@ -242,19 +242,28 @@ class FluentCard(FluentComponent):
         super().__init__(parent, **kwargs)
 
     def _setup_component(self, **kwargs):
-        """Setup card structure"""
+        """Setup card structure with rounded appearance"""
         # Configure card frame with elevation
         bg_color = FluentTheme.get_elevation_color(self.elevation)
         self.frame.configure(style='FluentCard.TFrame')
 
-        # Add border effect (simulated elevation)
-        self.card_container = tk.Frame(
+        # Simulate BizLink-style soft shadow (Tkinter limitation)
+        # BizLink uses very subtle, soft shadows: 0 2px 6px rgba(0,0,0,0.06)
+        # We simulate with extremely subtle border
+        shadow_frame = tk.Frame(
             self.frame,
+            bg='#F0F0F0',  # Extremely subtle shadow simulation
+        )
+        shadow_frame.pack(fill='both', expand=True, padx=0, pady=0)
+
+        # Card container - pure white like BizLink
+        self.card_container = tk.Frame(
+            shadow_frame,
             bg=bg_color,
-            highlightbackground=FluentTheme.NEUTRAL['gray60'],
+            highlightbackground='#E8E8E8',  # Very light border
             highlightthickness=1
         )
-        self.card_container.pack(fill='both', expand=True, padx=2, pady=2)
+        self.card_container.pack(fill='both', expand=True, padx=1, pady=2)  # More vertical offset for shadow effect
 
         # Header (optional)
         if self.title:
@@ -266,12 +275,14 @@ class FluentCard(FluentComponent):
             self.header.pack(fill='x', padx=self.padding, pady=(self.padding, 0))
             self.header.pack_propagate(False)
 
-            self.title_label = ttk.Label(
+            # BizLink-style card title: clean, semi-bold, ~14-16px
+            self.title_label = tk.Label(
                 self.header,
                 text=self.title,
-                style='Subtitle.TLabel'
+                font=('Segoe UI', 15, 'bold'),  # BizLink card title
+                fg=FluentTheme.NEUTRAL['gray160'],
+                bg=bg_color
             )
-            self.title_label.configure(background=bg_color)
             self.title_label.pack(side='left', anchor='w')
 
         # Body (scrollable content area)
