@@ -7,7 +7,7 @@ import os
 
 class SchedulingAgent:
     """
-    The Agent's core, utilizing Google Gemini 2.0 Flash (Experimental).
+    The Agent's core, utilizing the stable 'gemini-flash-latest' model.
     """
     def __init__(self, tools: list[AgentTool]):
         self._tools = tools
@@ -27,10 +27,10 @@ class SchedulingAgent:
         if not os.getenv("GOOGLE_API_KEY"):
             raise ValueError("GOOGLE_API_KEY not found. Check your .env file.")
         
-        # FIX: Use the 'Experimental' version. 
-        # The standard 'gemini-2.0-flash' often requires a billing account (Limit 0).
-        # 'gemini-2.0-flash-exp' is typically free for developers.
-        self._llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash-exp", temperature=0)
+        # FIX: Use 'gemini-flash-latest'. 
+        # This points to the currently active stable Flash model (1.5 or newer)
+        # and has the most reliable free tier quota.
+        self._llm = ChatGoogleGenerativeAI(model="gemini-flash-latest", temperature=0)
 
         # 3. Pull the Prompt
         prompt = hub.pull("hwchase17/react")
@@ -39,7 +39,12 @@ class SchedulingAgent:
         agent_construct = create_react_agent(self._llm, self._langchain_tools, prompt)
         
         # 5. Create Executor
-        self._executor = AgentExecutor(agent=agent_construct, tools=self._langchain_tools, verbose=True)
+        self._executor = AgentExecutor(
+            agent=agent_construct, 
+            tools=self._langchain_tools, 
+            verbose=True,
+            handle_parsing_errors=True # vital for stability
+        )
 
     def run(self, user_query: str):
         try:
