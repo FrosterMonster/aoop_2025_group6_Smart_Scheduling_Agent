@@ -1,6 +1,3 @@
-<<<<<<< HEAD
-./venv/Scripts/python.exe main.py
-=======
 #!/bin/bash
 
 # Run script for AI Schedule Agent
@@ -81,4 +78,3 @@ else
 fi
 
 exit $EXIT_CODE
->>>>>>> 2646380e138663d85d680e6d33fad2a7caaede3a
