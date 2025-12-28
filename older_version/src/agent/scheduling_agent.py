@@ -27,7 +27,8 @@ class SchedulingAgent:
         if not os.getenv("GOOGLE_API_KEY"):
             raise ValueError("GOOGLE_API_KEY not found. Check your .env file.")
         
-        self._llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash-exp", temperature=0)
+        # 改用 1.5 Pro，這通常有獨立的 50 次/日 額度，而且比較聰明（雖然慢一點點）
+        self._llm = ChatGoogleGenerativeAI(model="gemini-1.5-pro", temperature=0)
         # 3. Pull the Prompt
         prompt = hub.pull("hwchase17/react")
         
