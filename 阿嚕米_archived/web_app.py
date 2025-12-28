@@ -8,6 +8,8 @@ import pytz
 from calendar_tools import plan_week_schedule, get_calendar_service
 from calendar_service import TOKEN_FILE
 
+from calendar_time_parser import parse_with_ai
+
 app = Flask(__name__)
 app.secret_key = os.urandom(24)  # for session management
 
@@ -33,7 +35,23 @@ def login():
     # 觸發 OAuth 流程
     get_calendar_service()
     return redirect(url_for('index'))
-
+@app.route('/api/parse_nl', methods=['POST'])
+@login_required
+def api_parse_nl():
+    """接收自然語言指令並回傳 AI 解析後的 JSON。"""
+    data = request.json
+    user_text = data.get('text', '')
+    
+    if not user_text:
+        return jsonify({'error': '請輸入文字'}), 400
+    
+    # 呼叫你整合了 Gemini 的解析 Function
+    ai_result = parse_with_ai(user_text)
+    
+    if ai_result:
+        return jsonify(ai_result)
+    else:
+        return jsonify({'error': 'AI 解析失敗'}), 500
 @app.route('/schedule', methods=['GET', 'POST'])
 @login_required
 def schedule():

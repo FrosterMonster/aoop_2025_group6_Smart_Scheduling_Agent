@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AI Schedule Agent</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+</head>
+<body class="container mt-5">
+    <h2>AI 智能排程助理</h2>
+    
+    <div class="card p-4 mb-4 bg-light">
+        <label class="form-label">請輸入您的指令 (例如：每天晚上九點到十點要運動)</label>
+        <div class="input-group">
+            <input type="text" id="nl_input" class="form-control" placeholder="輸入指令...">
+            <button class="btn btn-primary" type="button" onclick="processNLInput()" id="process_btn">Process & Fill Form</button>
+        </div>
+    </div>
+
+    <form action="/schedule" method="post" class="card p-4">
+        <div class="mb-3">
+            <label class="form-label">事件標題 (Summary):</label>
+            <input type="text" name="summary" id="summary_field" class="form-control" required>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">預計總時數 (Hours):</label>
+            <input type="number" step="0.5" name="hours" id="hours_field" class="form-control" required>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">每次切分時數 (Chunk):</label>
+            <input type="number" step="0.5" name="chunk" value="1.0" class="form-control">
+        </div>
+        <button type="submit" class="btn btn-success">正式新增至日曆</button>
+    </form>
+
+    <script>
+    async function processNLInput() {
+        const text = document.getElementById('nl_input').value;
+        const btn = document.getElementById('process_btn');
+        if (!text) return alert("請輸入指令");
+
+        btn.disabled = true;
+        btn.innerText = "AI 思考中...";
+
+        try {
+            const response = await fetch('/api/parse_nl', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text: text })
+            });
+            const data = await response.json();
+            
+            if (data.error) {
+                alert("解析失敗: " + data.error);
+            } else {
+                // 將 AI 解析結果填入表單
+                document.getElementById('summary_field').value = data.title || "";
+                // 將分鐘轉為小時填入
+                document.getElementById('hours_field').value = data.duration ? data.duration / 60 : 1;
+                alert("AI 已自動填好表單，請檢查後提交！");
+            }
+        } catch (err) {
+            alert("連線失敗，請檢查後端是否啟動");
+        } finally {
+            btn.disabled = false;
+            btn.innerText = "Process & Fill Form";
+        }
+    }
+    </script>
+</body>
+</html>
