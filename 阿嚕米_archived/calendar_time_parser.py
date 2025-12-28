@@ -329,14 +329,13 @@ def _post_process_and_validate(raw: Dict[str, Any], nl_text: str) -> List[Dict[s
 
         # ---------- 時長補強（最終正解版） ----------
 
-        # 一律先用 fallback（語意確定）
-        duration = fallback_event.get("duration")
+        # 先用 AI（如果有）
+        duration = ev.get("duration")
 
-        # 如果 fallback 沒算到，再退回 AI
+        # 如果 AI 沒給，才用 fallback
         if not duration:
-            duration = ev.get("duration")
+            duration = fallback_event.get("duration")
 
-        # 防呆
         duration = int(duration or 60)
 
         # recurrence
