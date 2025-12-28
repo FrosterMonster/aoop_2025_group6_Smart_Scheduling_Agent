@@ -61,7 +61,6 @@ class SchedulingAgent:
         
         # 使用 Google 最穩定的免費模型
         self._llm = ChatGoogleGenerativeAI(model="gemini-flash-latest", temperature=0)
-
         # 設定 Prompt
         prompt = PromptTemplate(
             template=CUSTOM_SYSTEM_PROMPT,
