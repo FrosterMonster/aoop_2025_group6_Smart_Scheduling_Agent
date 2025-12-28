@@ -295,22 +295,6 @@ def _post_process_and_validate(raw: Dict[str, Any], nl_text: str) -> List[Dict[s
             title = "未命名活動"
 
 
-        # ---------- 活動名稱語意修正（關鍵） ----------
-
-        # 常見「調度語意」開頭（不是活動本身）
-        SCHEDULING_PREFIXES = [
-            "找空閒時間",
-            "找時間",
-            "幫我找",
-            "安排",
-            "幫我安排",
-            "找",
-        ]
-
-        for prefix in SCHEDULING_PREFIXES:
-            if title.startswith(prefix):
-                title = title.replace(prefix, "").strip()
-
         # 日期
         date_str = ev.get("date")
         date = datetime.strptime(date_str, "%Y-%m-%d").date() if date_str else today
@@ -335,6 +319,11 @@ def _post_process_and_validate(raw: Dict[str, Any], nl_text: str) -> List[Dict[s
             start_time = None
         else:
             is_flexible = not has_explicit_time
+
+        # ---------- 標題最終修正：調度語意時直接信任 fallback ----------
+
+        if is_flexible:
+            title = fallback_event.get("title", title)
 
         # ---------- 時長補強（最終正解版） ----------
 
