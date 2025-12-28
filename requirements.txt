@@ -29,3 +29,7 @@ plyer>=2.1.0
 
 # Additional dependencies
 python-dateutil>=2.8.2
+
+# Testing
+pytest>=7.4.0
+pytest-cov>=4.1.0

@@ -3,6 +3,7 @@
 import logging
 import time
 import json
+import functools
 from datetime import datetime
 from typing import Dict, Optional, List, Any
 from abc import ABC, abstractmethod
@@ -11,6 +12,53 @@ from ai_schedule_agent.config.manager import ConfigManager
 from ai_schedule_agent.models.event import Event
 
 logger = logging.getLogger(__name__)
+
+
+def retry_with_exponential_backoff(
+    max_retries: int = 2,
+    initial_delay: float = 1.0,
+    exponential_base: float = 2.0
+):
+    """Retry decorator with exponential backoff (from 阿嚕米)
+
+    Implements retry logic with exponential backoff: 1s → 2s → 4s
+    Useful for handling transient API failures and rate limits.
+
+    Args:
+        max_retries: Maximum number of retry attempts (default: 2)
+        initial_delay: Initial delay in seconds (default: 1.0)
+        exponential_base: Multiplier for delay (default: 2.0)
+
+    Example:
+        @retry_with_exponential_backoff(max_retries=2)
+        def call_api():
+            # Will retry up to 2 times with 1s, 2s delays
+            pass
+    """
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            retry_delay = initial_delay
+            last_exception = None
+
+            for attempt in range(max_retries + 1):
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    last_exception = e
+                    if attempt < max_retries:
+                        logger.warning(
+                            f"{func.__name__} attempt {attempt+1} failed: {e}. "
+                            f"Retrying in {retry_delay:.1f}s..."
+                        )
+                        time.sleep(retry_delay)
+                        retry_delay *= exponential_base
+                    else:
+                        logger.error(f"{func.__name__} failed after {max_retries} retries")
+
+            raise last_exception
+        return wrapper
+    return decorator
 
 
 class BaseLLMProvider(ABC):
@@ -73,8 +121,9 @@ class ClaudeProvider(BaseLLMProvider):
     def get_provider_name(self) -> str:
         return "claude"
 
+    @retry_with_exponential_backoff(max_retries=2)
     def call_llm(self, messages: List[Dict], tools: List[Dict], max_tokens: int) -> Dict:
-        """Call Claude API"""
+        """Call Claude API with automatic retry on failure"""
         self._ensure_initialized()  # Lazy load on first API call
 
         # Convert OpenAI-style messages to Claude format
@@ -168,8 +217,9 @@ class OpenAIProvider(BaseLLMProvider):
     def get_provider_name(self) -> str:
         return "openai"
 
+    @retry_with_exponential_backoff(max_retries=2)
     def call_llm(self, messages: List[Dict], tools: List[Dict], max_tokens: int) -> Dict:
-        """Call OpenAI API"""
+        """Call OpenAI API with automatic retry on failure"""
         self._ensure_initialized()  # Lazy load on first API call
 
         completion = self.client.chat.completions.create(
@@ -227,8 +277,9 @@ class GeminiProvider(BaseLLMProvider):
     def get_provider_name(self) -> str:
         return "gemini"
 
+    @retry_with_exponential_backoff(max_retries=2)
     def call_llm(self, messages: List[Dict], tools: List[Dict], max_tokens: int) -> Dict:
-        """Call Gemini API with structured output or simple text response"""
+        """Call Gemini API with structured output or simple text response (with automatic retry)"""
         self._ensure_initialized()  # Lazy load on first API call
         import google.generativeai as genai
 
@@ -420,7 +471,13 @@ Examples:
 ✓ "Meeting tomorrow at 2pm" -> start_time_str: "tomorrow 2pm", end_time_str: "1 hour"
 ✓ "Call today 9am for 30 minutes" -> start_time_str: "today 9am", end_time_str: "30 minutes"
 ✓ "Team lunch Friday noon" -> start_time_str: "Friday 12pm", end_time_str: "1 hour"
+✓ "aoop meeting at 11/20 pm7" -> start_time_str: "2025-11-20 19:00", end_time_str: "1 hour"
 ✗ "Meeting at 2pm" -> BAD (missing date - should be "today 2pm" or "tomorrow 2pm")
+
+IMPORTANT: Handle unusual formats:
+- "pm7" or "am9" means "7pm" or "9am"
+- "11/20" means "2025-11-20" (current year)
+- "11/20 pm7" -> "2025-11-20 19:00"
 
 === CHAT (NON-SCHEDULING) ===
 {
@@ -616,7 +673,22 @@ Examples:
 
         # Parse the structured JSON response
         try:
-            structured_data = json.loads(response.text)
+            # Get the response text
+            response_text = response.text if hasattr(response, 'text') else ''
+
+            if not response_text:
+                logger.error("Gemini returned empty response")
+                return {
+                    'content': 'I encountered an issue processing your request. Please try again.',
+                    'tool_calls': [],
+                    'action': 'chat'
+                }
+
+            # Log the raw response for debugging
+            logger.debug(f"Gemini raw response: {response_text[:500]}")
+
+            # Try to parse JSON
+            structured_data = json.loads(response_text)
 
             result = {
                 'content': structured_data.get('response', ''),
@@ -647,8 +719,24 @@ Examples:
 
         except json.JSONDecodeError as e:
             logger.error(f"Failed to parse Gemini structured output: {e}")
+            logger.error(f"Problematic JSON (first 500 chars): {response.text[:500] if hasattr(response, 'text') else 'N/A'}")
+
+            # Try to extract any useful information from the malformed response
+            try:
+                response_text = response.text if hasattr(response, 'text') else ''
+
+                # Check if response contains any indication of what the user wants
+                if 'schedule' in response_text.lower() or 'meeting' in response_text.lower():
+                    return {
+                        'content': 'I understand you want to schedule something, but I had trouble processing the details. Please try rephrasing your request with clear date, time, and title.',
+                        'tool_calls': [],
+                        'action': 'chat'
+                    }
+            except:
+                pass
+
             return {
-                'content': response.text,
+                'content': 'I had trouble understanding your request. Please try again with a clear format like: "Schedule [event name] on [date] at [time] for [duration]"',
                 'tool_calls': [],
                 'action': 'chat'
             }

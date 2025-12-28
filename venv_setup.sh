@@ -40,43 +40,85 @@ print_detail() {
 # Step 1: Check Python version
 echo "Step 1: Checking Python version..."
 print_detail "Searching for Python installation..."
+print_detail "Prioritizing Python 3.12 (recommended) over 3.13..."
 
-# Find Python command (try python, python3, py)
+# Find best Python version (try 3.12 first, then 3.11, 3.10, 3.9, then fallback)
 PYTHON_CMD=""
-if command -v python &> /dev/null && python --version &> /dev/null; then
-    PYTHON_CMD="python"
-    print_detail "Found 'python' command: $(which python)"
-elif command -v python3 &> /dev/null; then
-    PYTHON_CMD="python3"
-    print_detail "Found 'python3' command: $(which python3)"
-elif command -v py &> /dev/null; then
-    PYTHON_CMD="py"
-    print_detail "Found 'py' launcher: $(which py)"
+PYTHON_CANDIDATES=("python3.12" "python3.11" "python3.10" "python3.9" "python3" "python" "py")
+
+for cmd in "${PYTHON_CANDIDATES[@]}"; do
+    if command -v $cmd &> /dev/null && $cmd --version &> /dev/null; then
+        VERSION=$($cmd --version 2>&1 | awk '{print $2}')
+        MAJOR=$(echo $VERSION | cut -d. -f1)
+        MINOR=$(echo $VERSION | cut -d. -f2)
+
+        # Skip if Python version is too low or too high
+        if [ "$MAJOR" -eq 3 ] && [ "$MINOR" -ge 9 ] && [ "$MINOR" -le 12 ]; then
+            PYTHON_CMD=$cmd
+            print_success "Found compatible Python $VERSION (using '$cmd' command)"
+            print_detail "Python executable: $(which $cmd)"
+            break
+        elif [ "$MAJOR" -eq 3 ] && [ "$MINOR" -eq 13 ]; then
+            # Found Python 3.13 - save as fallback but continue searching for 3.12
+            if [ -z "$FALLBACK_CMD" ]; then
+                FALLBACK_CMD=$cmd
+                FALLBACK_VERSION=$VERSION
+            fi
+        fi
+    fi
+done
+
+# If no compatible version found but we have 3.13 fallback, use it with warning
+if [ -z "$PYTHON_CMD" ] && [ -n "$FALLBACK_CMD" ]; then
+    PYTHON_CMD=$FALLBACK_CMD
+    PYTHON_VERSION=$FALLBACK_VERSION
+    print_warning "Only Python 3.13 found - this version has known Tkinter issues on Windows!"
+    print_detail "Python executable: $(which $PYTHON_CMD)"
+    echo ""
+    print_error "RECOMMENDED: Install Python 3.12 instead"
+    print_info "Download Python 3.12.7 from: https://www.python.org/downloads/release/python-3127/"
+    echo ""
+    print_warning "Python 3.13 may encounter errors like 'Can't find a usable init.tcl'"
+    print_warning "This is a known issue with Tkinter in Python 3.13 on Windows"
+    echo ""
+    read -p "Continue with Python 3.13 anyway? (y/N): " -n 1 -r
+    echo ""
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        print_info "Setup cancelled. Please install Python 3.12 and try again."
+        print_detail "After installing Python 3.12, run: ./venv_setup.sh"
+        exit 1
+    fi
+    print_warning "Proceeding with Python 3.13 (expect potential GUI issues)"
 fi
 
 if [ -z "$PYTHON_CMD" ]; then
-    print_error "Python not found! Please install Python 3.9-3.12"
-    print_info "Download from: https://www.python.org/downloads/"
+    print_error "No compatible Python found! Python 3.9-3.12 required"
+    print_info "Download Python 3.12.7 (RECOMMENDED): https://www.python.org/downloads/release/python-3127/"
     exit 1
 fi
 
+# Get version info
 PYTHON_VERSION=$($PYTHON_CMD --version 2>&1 | awk '{print $2}')
 PYTHON_MAJOR=$(echo $PYTHON_VERSION | cut -d. -f1)
 PYTHON_MINOR=$(echo $PYTHON_VERSION | cut -d. -f2)
 PYTHON_PATCH=$(echo $PYTHON_VERSION | cut -d. -f3)
 
-print_info "Found Python $PYTHON_VERSION (using '$PYTHON_CMD' command)"
-print_detail "Python executable: $($PYTHON_CMD -c 'import sys; print(sys.executable)')"
+print_info "Using Python $PYTHON_VERSION"
 print_detail "Python version: $PYTHON_MAJOR.$PYTHON_MINOR.$PYTHON_PATCH"
 
+# Final version validation with specific messaging
 if [ "$PYTHON_MAJOR" -lt 3 ] || [ "$PYTHON_MINOR" -lt 9 ]; then
     print_error "Python 3.9 or higher is required. You have Python $PYTHON_VERSION"
+    print_info "Download Python 3.12.7: https://www.python.org/downloads/release/python-3127/"
     exit 1
+elif [ "$PYTHON_MINOR" -eq 13 ]; then
+    print_warning "Using Python 3.13 - known issues with Tkinter on Windows!"
+    print_warning "If you see 'Can't find a usable init.tcl' error, install Python 3.12"
 elif [ "$PYTHON_MINOR" -gt 13 ]; then
-    print_warning "Python 3.13 or lower is recommended. You have Python $PYTHON_VERSION"
+    print_warning "Python 3.14+ detected. Tested up to 3.12. You have Python $PYTHON_VERSION"
     print_warning "The application might work, but hasn't been tested with this version"
 else
-    print_success "Python version is compatible (3.9-3.13 supported)"
+    print_success "Python version is compatible (3.9-3.12 supported)"
 fi
 
 echo ""
@@ -175,8 +217,9 @@ fi
 # Create new venv only if needed
 if [ "$VENV_EXISTS" = false ]; then
     print_info "Creating new virtual environment..."
-    print_detail "Running: $PYTHON_CMD -m venv venv"
-    $PYTHON_CMD -m venv venv
+    print_detail "Running: $PYTHON_CMD -m venv venv --system-site-packages"
+    print_detail "Using --system-site-packages to inherit tkinter from system Python"
+    $PYTHON_CMD -m venv venv --system-site-packages
 
     if [ ! -d "venv" ]; then
         print_error "Failed to create virtual environment"
@@ -392,13 +435,15 @@ echo ""
 echo "Step 8: Verifying installation..."
 print_detail "Running final checks..."
 
-# Check tkinter again (in case it was installed during setup)
-print_detail "Checking tkinter availability..."
-if $PYTHON_CMD -c "import tkinter" 2>/dev/null; then
-    TKINTER_VERSION=$($PYTHON_CMD -c "import tkinter; print(tkinter.TkVersion)" 2>/dev/null)
-    print_detail "  ✓ tkinter ($TKINTER_VERSION)"
+# Check tkinter again (in venv - the actual environment used by the app)
+print_detail "Checking tkinter availability in virtual environment..."
+if $VENV_PYTHON -c "import tkinter" 2>/dev/null; then
+    TKINTER_VERSION=$($VENV_PYTHON -c "import tkinter; print(tkinter.TkVersion)" 2>/dev/null)
+    print_detail "  ✓ tkinter ($TKINTER_VERSION) - accessible in venv"
 else
-    print_detail "  ✗ tkinter (NOT INSTALLED - GUI will not work!)"
+    print_detail "  ✗ tkinter (NOT ACCESSIBLE IN VENV - GUI will not work!)"
+    print_warning "Virtual environment cannot access system tkinter"
+    print_info "This usually means system Python doesn't have tkinter installed"
 fi
 
 print_detail "Checking key Python packages:"
@@ -429,15 +474,29 @@ print_success "Python environment is ready"
 print_success "Configuration files created"
 print_success ".env file initialized"
 
-# Check tkinter one more time for final summary
-if ! $PYTHON_CMD -c "import tkinter" 2>/dev/null; then
+# Check tkinter one more time for final summary (using venv Python)
+if ! $VENV_PYTHON -c "import tkinter" 2>/dev/null; then
     echo ""
-    print_error "CRITICAL: tkinter is NOT installed!"
+    print_error "CRITICAL: tkinter is NOT accessible in the virtual environment!"
     print_warning "The application GUI will NOT work without tkinter"
-    print_info "Install tkinter before running the app:"
+    print_info "To fix this issue:"
+    echo ""
+    echo "  1. Install tkinter on your SYSTEM Python first:"
+    if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+        echo "     sudo apt-get install python3-tk"
+    elif [[ "$OSTYPE" == "darwin"* ]]; then
+        echo "     brew install python-tk"
+    elif [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" ]]; then
+        echo "     Repair Python: Settings → Apps → Python → Modify"
+        echo "     Ensure 'tcl/tk and IDLE' is checked"
+    fi
+    echo ""
+    echo "  2. Recreate the virtual environment:"
+    echo "     rm -rf venv"
+    echo "     ./venv_setup.sh"
+    echo ""
     echo "  See: docs/guides/TKINTER_INSTALLATION.md"
-    echo "  Test: python3 -m tkinter"
-    echo "  Quick test: python test_tkinter.py"
+    echo "  Test after install: python3 -m tkinter"
 fi
 
 echo ""

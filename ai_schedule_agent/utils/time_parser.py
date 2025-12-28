@@ -72,6 +72,17 @@ def parse_nl_time(nl_time_str: str, prefer_future: bool = True, timezone: Option
     elif '昨天' in s or '昨日' in s or 'yesterday' in s.lower():
         base = now - timedelta(days=1)
         logger.debug("Detected: 昨天/yesterday")
+    elif '這周' in s or '這週' in s or '本周' in s or '本週' in s or 'this week' in s.lower():
+        # For "this week", use today as base (schedule optimization will find best time)
+        base = now
+        logger.debug("Detected: 這周/this week")
+    elif '下周' in s or '下週' in s or 'next week' in s.lower():
+        # For "next week", use next Monday as base
+        days_until_monday = (7 - now.weekday()) % 7
+        if days_until_monday == 0:
+            days_until_monday = 7  # If today is Monday, go to next Monday
+        base = now + timedelta(days=days_until_monday)
+        logger.debug(f"Detected: 下周/next week -> +{days_until_monday} days")
 
     # Handle "next [day]" patterns (e.g., "next monday", "next friday")
     next_day_match = re.search(r'next\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|wed|thu|fri|sat|sun)', s.lower())

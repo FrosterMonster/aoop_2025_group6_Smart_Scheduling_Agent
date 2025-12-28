@@ -17,17 +17,27 @@ Your LLM wasn't correctly filling out the event form because the prompts were am
 - Added explicit examples of correct vs incorrect format
 - Emphasized that start time MUST include BOTH date and time
 - Specified duration format preference ("1 hour" is better than "3pm")
+- Added handling for unusual formats like "pm7" → "7pm" and "11/20" → "2025-11-20"
 
 ### 2. Better Error Handling
 - Added detailed logging to debug issues
 - Default values (1 hour) when duration is missing
 - Graceful fallbacks if parsing fails
+- **Gemini-specific**: Enhanced JSON error handling with helpful user messages
 
 ### 3. Improved for All Providers
 Works with:
-- ✅ Claude (Anthropic)
-- ✅ OpenAI (GPT-4/3.5)
-- ✅ Gemini (Google)
+- ✅ Claude (Anthropic) - Excellent instruction following
+- ✅ OpenAI (GPT-4/3.5) - Reliable tool calling
+- ✅ Gemini (Google) - Enhanced with JSON error recovery
+
+### 4. Gemini JSON Error Fix
+**Issue**: Gemini sometimes returns malformed JSON (unterminated strings)
+**Fix**:
+- Enhanced error logging to show raw response
+- Graceful fallback with helpful user message
+- Added unusual format examples to prompt
+- See [GEMINI_JSON_ERROR_FIX.md](GEMINI_JSON_ERROR_FIX.md) for details
 
 ---
 

@@ -2,6 +2,18 @@
 
 > Intelligent Personal Scheduling Assistant with Google Calendar integration and AI-powered pattern learning.
 
+---
+
+## 🚨 **Got Python 3.13 Error? → [ONE-COMMAND FIX](QUICK_START.md#-got-the-cant-find-a-usable-inittcl-error)**
+
+```bash
+./fix_python313.sh  # Automatically fixes Python 3.13 Tkinter issues
+```
+
+See **[QUICK_START.md](QUICK_START.md)** for the fastest way to get running!
+
+---
+
 ## ✨ Features
 
 - 🗣️ **Natural Language Processing** - Schedule events using plain English
@@ -16,11 +28,18 @@
 
 ### 1. Setup (One Command)
 
+**IMPORTANT**: Before running setup, ensure tkinter is installed on your system Python:
+```bash
+python -m tkinter  # Should show a test window
+```
+
+If not installed, see [Prerequisites](#-installing-prerequisites) below first.
+
 ```bash
 ./venv_setup.sh
 ```
 
-This installs dependencies, downloads NLP models, and creates config files.
+This installs dependencies, downloads NLP models, and creates config files. The virtual environment will automatically inherit tkinter from your system Python.
 
 ### 2. Configure API Keys
 
@@ -99,11 +118,14 @@ USE_MODERN_UI=false ./run.sh
 
 ## 🛠️ System Requirements
 
-- **Python**: 3.9, 3.10, 3.11, 3.12, or 3.13 (3.11/3.12 recommended)
+- **Python**: 3.9 - 3.12 (**3.12.7 recommended** - avoid 3.13 on Windows)
 - **OS**: Windows, Linux, or macOS
 - **GUI Library**: tkinter (see installation below)
 - **Google Account**: For Calendar integration
 - **API Key**: Claude (Anthropic), OpenAI, or Gemini
+
+⚠️ **Important**: Python 3.13 has known Tkinter issues on Windows. Use Python 3.12.7 instead.
+See [PYTHON_VERSION_GUIDE.md](PYTHON_VERSION_GUIDE.md) for details.
 
 ### 📦 Installing Prerequisites
 
@@ -124,18 +146,41 @@ brew install python@3.12  # Includes tkinter
 ```
 
 #### Windows
-- Download Python from [python.org](https://www.python.org/downloads/)
+- **Download Python 3.12.7** (recommended): https://www.python.org/downloads/release/python-3127/
 - During installation, ensure "tcl/tk and IDLE" is checked
-- tkinter is included by default
+- **Avoid Python 3.13** - has known Tkinter compatibility issues
+- If already installed, repair: Settings → Apps → Python → Modify → Ensure "tcl/tk and IDLE" is checked
 
 #### Verify Installation
 ```bash
-python3 -m tkinter  # Should show a test window
+python -m tkinter  # Should show a test window
 # OR
 python test_tkinter.py
 ```
 
-**Troubleshooting**: If you see "No module named 'tkinter'", see [TKINTER_INSTALLATION.md](docs/guides/TKINTER_INSTALLATION.md)
+**IMPORTANT**: If you get "Can't find a usable init.tcl" or "Tcl isn't installed" error:
+
+⚡ **QUICK FIX** (Automated - Recommended):
+```bash
+./fix_python313.sh
+```
+This script automatically fixes Python 3.13 issues!
+
+📋 **Manual Fix**:
+1. **Most likely cause**: You're using Python 3.13 on Windows
+2. **Solution**: Install Python 3.12.7 instead
+3. Delete the venv folder: `rm -rf venv` (or `rmdir /s venv` on Windows CMD)
+4. Run `./venv_setup.sh` again (will auto-detect Python 3.12)
+
+🔍 **Check Your Setup**:
+```bash
+./check_python.sh  # Diagnose Python issues
+```
+
+**Troubleshooting Guides**:
+- [FIX_PYTHON_313_TKINTER_ERROR.md](FIX_PYTHON_313_TKINTER_ERROR.md) - Quick fix guide
+- [PYTHON_VERSION_GUIDE.md](PYTHON_VERSION_GUIDE.md) - Python version issues
+- [TKINTER_INSTALLATION.md](docs/guides/TKINTER_INSTALLATION.md) - Tkinter installation
 
 ## 📦 Project Structure
 

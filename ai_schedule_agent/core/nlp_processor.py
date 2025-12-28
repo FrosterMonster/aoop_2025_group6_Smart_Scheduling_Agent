@@ -133,14 +133,19 @@ class NLPProcessor:
 
         # Rule-based processing (original logic)
         logger.info(f"Processing with rule-based NLP: '{text}'")
+
+        # NEW: Try Chinese-specific patterns FIRST (from 阿嚕米)
+        chinese_result = self._extract_with_chinese_patterns(text)
+
         result = {
             'action': 'create',  # Default to create
             'event_type': EventType.MEETING,  # Default to meeting
             'participants': [],
-            'datetime': None,
-            'duration': None,
+            'datetime': chinese_result.get('datetime'),  # Prefer Chinese extraction
+            'end_datetime': chinese_result.get('end_datetime'),  # From Chinese patterns
+            'duration': chinese_result.get('duration'),  # From Chinese patterns
             'location': None,
-            'title': None,
+            'title': chinese_result.get('title'),  # Prefer Chinese extraction
             'description': None,
             'llm_mode': False
         }
@@ -149,12 +154,17 @@ class NLPProcessor:
         text_lower = text.lower()
         original_text = text
 
-        # Determine action
-        if any(word in text_lower for word in ['schedule', 'book', 'arrange', 'set up', 'add', 'create']):
+        # Determine action (including Chinese keywords)
+        create_keywords = ['schedule', 'book', 'arrange', 'set up', 'add', 'create',
+                          '安排', '排', '訂', '預定', '建立', '新增']
+        reschedule_keywords = ['reschedule', 'move', 'change', '改', '移動', '更改', '調整']
+        cancel_keywords = ['cancel', 'delete', 'remove', '取消', '刪除', '移除']
+
+        if any(word in text_lower or word in text for word in create_keywords):
             result['action'] = 'create'
-        elif any(word in text_lower for word in ['reschedule', 'move', 'change']):
+        elif any(word in text_lower or word in text for word in reschedule_keywords):
             result['action'] = 'reschedule'
-        elif any(word in text_lower for word in ['cancel', 'delete', 'remove']):
+        elif any(word in text_lower or word in text for word in cancel_keywords):
             result['action'] = 'cancel'
 
         # Determine event type
@@ -218,70 +228,73 @@ class NLPProcessor:
                 break
 
         # Extract datetime (do this after extracting location to avoid conflicts)
-        # First, try to normalize common date/time patterns
-        normalized_text = text
+        # Only use dateparser fallback if Chinese patterns didn't find datetime
+        if not result.get('datetime'):
+            # First, try to normalize common date/time patterns
+            normalized_text = text
 
-        # Handle patterns like "11/27 pm9:00" -> "11/27 9:00 PM"
-        normalized_text = re.sub(r'(\d{1,2}/\d{1,2})\s*(pm|am)(\d{1,2}):(\d{2})',
-                                r'\1 \3:\4 \2', normalized_text, flags=re.IGNORECASE)
+            # Handle patterns like "11/27 pm9:00" -> "11/27 9:00 PM"
+            normalized_text = re.sub(r'(\d{1,2}/\d{1,2})\s*(pm|am)(\d{1,2}):(\d{2})',
+                                    r'\1 \3:\4 \2', normalized_text, flags=re.IGNORECASE)
 
-        # Try parsing the normalized text first
-        parsed_date = dateparser.parse(normalized_text, settings={
-            'PREFER_DATES_FROM': 'future'
-        })
-
-        # If that fails, try original text
-        if not parsed_date:
-            parsed_date = dateparser.parse(text, settings={
+            # Try parsing the normalized text first
+            parsed_date = dateparser.parse(normalized_text, settings={
                 'PREFER_DATES_FROM': 'future'
             })
 
-        if parsed_date:
-            result['datetime'] = parsed_date
+            # If that fails, try original text
+            if not parsed_date:
+                parsed_date = dateparser.parse(text, settings={
+                    'PREFER_DATES_FROM': 'future'
+                })
 
-        # Extract title (smart extraction)
-        title = None
+            if parsed_date:
+                result['datetime'] = parsed_date
 
-        # 1. Check for quoted text
-        quoted = re.findall(r'"([^"]*)"', text)
-        if quoted:
-            title = quoted[0]
-        else:
-            # 2. Try to extract based on patterns
-            # Remove action words and temporal expressions
-            clean_text = original_text
+        # Extract title (smart extraction) - only if Chinese patterns didn't find one
+        title = result.get('title')  # Use Chinese-extracted title if available
 
-            # Remove common action words
-            for word in ['schedule', 'book', 'arrange', 'set up', 'add', 'create', 'please', 'can you']:
-                clean_text = re.sub(rf'\b{word}\b', '', clean_text, flags=re.IGNORECASE)
-
-            # Remove time expressions
-            time_words = ['tomorrow', 'today', 'next week', 'next month', 'on monday', 'on tuesday',
-                         'on wednesday', 'on thursday', 'on friday', 'on saturday', 'on sunday',
-                         r'at \d+', r'for \d+', 'this morning', 'this afternoon', 'this evening']
-            for word in time_words:
-                clean_text = re.sub(rf'\b{word}\b[^,]*', '', clean_text, flags=re.IGNORECASE)
-
-            # Remove participant references
-            if with_match:
-                clean_text = clean_text.replace(with_match.group(0), '')
-
-            # Remove location references (at/in location)
-            clean_text = re.sub(r'\s+(?:at|in|@)\s+[A-Z][A-Za-z\s]+', '', clean_text)
-
-            # Clean up and extract
-            clean_text = re.sub(r'\s+', ' ', clean_text).strip()
-            clean_text = clean_text.strip(',.-')
-
-            if clean_text and len(clean_text) > 2:
-                title = clean_text
+        if not title:
+            # 1. Check for quoted text
+            quoted = re.findall(r'"([^"]*)"', text)
+            if quoted:
+                title = quoted[0]
             else:
-                # Fallback: use the first few words
-                words = original_text.split()
-                if len(words) >= 2:
-                    title = ' '.join(words[:3])
+                # 2. Try to extract based on patterns
+                # Remove action words and temporal expressions
+                clean_text = original_text
+
+                # Remove common action words
+                for word in ['schedule', 'book', 'arrange', 'set up', 'add', 'create', 'please', 'can you']:
+                    clean_text = re.sub(rf'\b{word}\b', '', clean_text, flags=re.IGNORECASE)
+
+                # Remove time expressions
+                time_words = ['tomorrow', 'today', 'next week', 'next month', 'on monday', 'on tuesday',
+                             'on wednesday', 'on thursday', 'on friday', 'on saturday', 'on sunday',
+                             r'at \d+', r'for \d+', 'this morning', 'this afternoon', 'this evening']
+                for word in time_words:
+                    clean_text = re.sub(rf'\b{word}\b[^,]*', '', clean_text, flags=re.IGNORECASE)
+
+                # Remove participant references
+                if with_match:
+                    clean_text = clean_text.replace(with_match.group(0), '')
+
+                # Remove location references (at/in location)
+                clean_text = re.sub(r'\s+(?:at|in|@)\s+[A-Z][A-Za-z\s]+', '', clean_text)
+
+                # Clean up and extract
+                clean_text = re.sub(r'\s+', ' ', clean_text).strip()
+                clean_text = clean_text.strip(',.-')
+
+                if clean_text and len(clean_text) > 2:
+                    title = clean_text
                 else:
-                    title = original_text
+                    # Fallback: use the first few words
+                    words = original_text.split()
+                    if len(words) >= 2:
+                        title = ' '.join(words[:3])
+                    else:
+                        title = original_text
 
         result['title'] = title.strip() if title else 'New Event'
 
@@ -405,19 +418,30 @@ class NLPProcessor:
         search_end = search_start + timedelta(days=search_days)
 
         # Convert to UTC for Google Calendar API
+        import pytz
         if hasattr(search_start, 'tzinfo') and search_start.tzinfo is not None:
             search_start_utc = search_start.astimezone(datetime.timezone.utc)
             search_end_utc = search_end.astimezone(datetime.timezone.utc)
         else:
-            search_start_utc = search_start
-            search_end_utc = search_end
+            # Naive datetime - assume local timezone
+            local_tz = pytz.timezone('Asia/Taipei')
+            search_start = local_tz.localize(search_start)
+            search_end = local_tz.localize(search_end)
+            search_start_utc = search_start.astimezone(datetime.timezone.utc)
+            search_end_utc = search_end.astimezone(datetime.timezone.utc)
 
         # Fetch existing events
         try:
-            existing_events = self.calendar.get_events(
-                search_start_utc.isoformat().replace('+00:00', 'Z'),
-                search_end_utc.isoformat().replace('+00:00', 'Z')
-            )
+            # Ensure proper RFC3339 format with 'Z' suffix
+            time_min = search_start_utc.isoformat().replace('+00:00', 'Z')
+            time_max = search_end_utc.isoformat().replace('+00:00', 'Z')
+
+            # Validate format (should end with 'Z')
+            if not time_min.endswith('Z') or not time_max.endswith('Z'):
+                logger.error(f"Invalid timestamp format: time_min={time_min}, time_max={time_max}")
+                return None
+
+            existing_events = self.calendar.get_events(time_min, time_max)
         except Exception as e:
             logger.error(f"Failed to fetch calendar events: {e}")
             return None
@@ -434,8 +458,17 @@ class NLPProcessor:
                 search_end = search_end + timedelta(days=attempt * 3)
 
                 # Fetch events for new window
-                search_start_utc = search_start.astimezone(datetime.timezone.utc)
-                search_end_utc = search_end.astimezone(datetime.timezone.utc)
+                if hasattr(search_start, 'tzinfo') and search_start.tzinfo is not None:
+                    search_start_utc = search_start.astimezone(datetime.timezone.utc)
+                    search_end_utc = search_end.astimezone(datetime.timezone.utc)
+                else:
+                    import pytz
+                    local_tz = pytz.timezone('Asia/Taipei')
+                    search_start = local_tz.localize(search_start)
+                    search_end = local_tz.localize(search_end)
+                    search_start_utc = search_start.astimezone(datetime.timezone.utc)
+                    search_end_utc = search_end.astimezone(datetime.timezone.utc)
+
                 existing_events = self.calendar.get_events(
                     search_start_utc.isoformat().replace('+00:00', 'Z'),
                     search_end_utc.isoformat().replace('+00:00', 'Z')
@@ -737,6 +770,126 @@ REASON: Free slot in afternoon, no conflicts, good spacing"""
         }
 
         logger.info(f"Converted LLM result: title='{result['title']}', datetime={result['datetime']}, duration={result['duration']}min")
+        return result
+
+    def _extract_with_chinese_patterns(self, text: str) -> Dict:
+        """Enhanced Chinese pattern extraction from 阿嚕米
+
+        Extracts event details using regex patterns optimized for Chinese text:
+        - Brackets: 「」 "" 『』
+        - Time ranges: 到 (to)
+        - Relative dates: 今天/明天/後天
+        - Duration: X小時
+
+        Args:
+            text: Natural language text (Chinese or mixed)
+
+        Returns:
+            Dict with 'title', 'datetime', 'end_datetime', 'duration' keys
+        """
+        result = {}
+
+        # Extract title from Chinese brackets or quotes
+        summary = None
+        # Pattern 1: Chinese/English quotes: 「」 "" 『』
+        m = re.search(r'["\u201c\u201d\u300c\u300d\u300e\u300f](.+?)["\u201c\u201d\u300c\u300d\u300e\u300f]', text)
+        if m:
+            summary = m.group(1)
+        else:
+            # Pattern 2: 安排「...」 or 安排...
+            m2 = re.search(r'[安排排](?:一個|個)?(?:「([^」]+)」|(.+?)(?:小時|，|,|。|$))', text)
+            if m2:
+                summary = m2.group(1) or m2.group(2)
+
+        if summary:
+            result['title'] = summary.strip()
+            logger.debug(f"Chinese pattern extracted title: '{result['title']}'")
+
+        # Extract duration: X小時 or X分鐘
+        duration_match = re.search(r'(\d+)\s*小時', text)
+        if duration_match:
+            hours = int(duration_match.group(1))
+            result['duration'] = hours * 60  # Convert to minutes
+            logger.debug(f"Chinese pattern extracted duration: {result['duration']} minutes ({hours} hours)")
+
+        if not duration_match:
+            minute_match = re.search(r'(\d+)\s*分鐘', text)
+            if minute_match:
+                result['duration'] = int(minute_match.group(1))
+                logger.debug(f"Chinese pattern extracted duration: {result['duration']} minutes")
+
+        # Extract time range using '到' (to) pattern
+        if '到' in text:
+            parts = text.split('到')
+            # Extract start time (after '時間是' if present)
+            start_str = parts[0].split('時間是')[-1].strip() if '時間是' in parts[0] else parts[0].strip()
+            # Extract end time (before punctuation)
+            end_str = parts[1].split('。')[0].split('，')[0].strip()
+
+            # Use ASA's superior time parser
+            start_dt = parse_nl_time(start_str)
+            end_dt = parse_nl_time(end_str)
+
+            if start_dt:
+                result['datetime'] = start_dt
+                logger.debug(f"Chinese pattern extracted start time: {start_dt}")
+            if end_dt:
+                result['end_datetime'] = end_dt
+                logger.debug(f"Chinese pattern extracted end time: {end_dt}")
+                if start_dt:
+                    # Calculate duration in minutes
+                    result['duration'] = int((end_dt - start_dt).total_seconds() / 60)
+                    logger.debug(f"Chinese pattern calculated duration: {result['duration']} minutes")
+
+        # Extract single time with relative date pattern: 明天下午/今天晚上 etc.
+        if not result.get('datetime'):
+            # More flexible pattern for Chinese relative dates
+            patterns = [
+                r'(明天|今天|後天)(下午|上午|早上|中午|晚上|傍晚)?',  # Tomorrow afternoon, etc.
+                r'(今天|明天|後天).*?(\d{1,2})\s*點',  # Today...2pm
+                r'(本週|下週)(一|二|三|四|五|六|日)',  # This week Monday
+            ]
+
+            for pattern in patterns:
+                m3 = re.search(pattern, text)
+                if m3:
+                    time_str = m3.group(0)
+
+                    # If specific time (X點) is mentioned, use it
+                    if '點' in time_str:
+                        dt = parse_nl_time(time_str)
+                        if dt:
+                            result['datetime'] = dt
+                            logger.debug(f"Chinese pattern extracted specific datetime: {dt}")
+                            break
+                    else:
+                        # NO specific time - store time preference for scheduling engine
+                        # Don't set datetime - let scheduling engine find optimal slot
+                        time_period = None
+                        if '下午' in time_str:
+                            time_period = 'afternoon'
+                            result['time_preference'] = {'period': 'afternoon', 'start_hour': 13, 'end_hour': 18}
+                        elif '上午' in time_str or '早上' in time_str:
+                            time_period = 'morning'
+                            result['time_preference'] = {'period': 'morning', 'start_hour': 9, 'end_hour': 12}
+                        elif '晚上' in time_str or '傍晚' in time_str:
+                            time_period = 'evening'
+                            result['time_preference'] = {'period': 'evening', 'start_hour': 18, 'end_hour': 21}
+                        elif '中午' in time_str:
+                            time_period = 'noon'
+                            result['time_preference'] = {'period': 'noon', 'start_hour': 11, 'end_hour': 14}
+
+                        # Store target date without time (scheduling engine will find slot)
+                        date_only_str = m3.group(1)  # 明天/今天/後天
+                        dt = parse_nl_time(date_only_str)
+                        if dt:
+                            # Store as target_date instead of datetime
+                            result['target_date'] = dt.date()
+                            logger.info(f"Chinese pattern: target_date={dt.date()}, time_preference={time_period}, "
+                                       f"let scheduling engine find optimal slot")
+                            break
+
+        logger.debug(f"Chinese pattern extraction complete: {list(result.keys())}")
         return result
 
     def reset_conversation(self):
