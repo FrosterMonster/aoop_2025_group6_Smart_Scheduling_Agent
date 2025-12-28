@@ -20,6 +20,21 @@ MODEL_NAME = "models/gemini-flash-latest"
 TZ = "Asia/Taipei"
 
 
+CHINESE_NUM_MAP = {
+    "零": 0,
+    "一": 1,
+    "二": 2,
+    "兩": 2,
+    "三": 3,
+    "四": 4,
+    "五": 5,
+    "六": 6,
+    "七": 7,
+    "八": 8,
+    "九": 9,
+    "十": 10,
+}
+
 # ---------- 公開介面 ----------
 def parse_with_ai(nl_text: str) -> Dict[str, Any]:
     """
@@ -59,8 +74,14 @@ def _rule_based_fallback(nl_text: str) -> Dict[str, Any]:
     start_time = None
     is_flexible = True
 
+    # --- 中文數字時間轉換（一定要在 regex 前） ---
+    for zh, num in CHINESE_NUM_MAP.items():
+        nl_text = nl_text.replace(f"{zh}點", f"{num}點")
+
     # 只抓「X點 / X:MM」
     time_match = re.search(r'(\d{1,2})\s*(?:點|:)(\d{1,2})?', nl_text)
+
+    
     if time_match:
         hour = int(time_match.group(1))
         minute = int(time_match.group(2) or 0)
