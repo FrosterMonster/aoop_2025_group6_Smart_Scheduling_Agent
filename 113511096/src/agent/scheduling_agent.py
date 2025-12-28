@@ -30,7 +30,7 @@ class SchedulingAgent:
             
         # FIX: We use 'gemini-pro' because it is the standard model supported 
         # by the stable version of the library we installed.
-        self._llm = ChatGoogleGenerativeAI(model="gemini-pro", temperature=0)
+        self._llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0)
 
         # 3. Pull the Prompt
         # This downloads a standard "Reason+Act" prompt template
