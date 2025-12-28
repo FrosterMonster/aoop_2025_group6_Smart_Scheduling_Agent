@@ -320,10 +320,10 @@ def _post_process_and_validate(raw: Dict[str, Any], nl_text: str) -> List[Dict[s
         else:
             is_flexible = not has_explicit_time
 
-        # ---------- 標題最終修正：調度語意時直接信任 fallback ----------
-
+        # ---------- 標題最終修正（只在 AI 抽不到活動本體時才 fallback） ----------
         if is_flexible:
-            title = fallback_event.get("title", title)
+            if title in ("", "未命名活動"):
+                title = fallback_event.get("title", title)
 
         # ---------- 時長補強（最終正解版） ----------
 
