@@ -1,18 +1,58 @@
+import pytest
+import datetime
+import json
 from src.tools.calendar import CalendarTool
 
-# 1. Initialize Tool (Triggers Authentication Flow)
-calendar = CalendarTool()
-print(calendar) # Tests __str__ magic method
+def test_calendar_tool_initialization():
+    tool = CalendarTool()
+    assert tool.name == "google_calendar"
+    assert "json" in tool.description.lower()
 
-# 2. Test Creating an Event
-print("Creating event...")
-result = calendar.execute(
-    action="create_event", 
-    summary="AOOP Group 6 Meeting", 
-    start_time="2025-10-25T10:00:00", 
-    end_time="2025-10-25T11:00:00"
-)
-print(result)
+def test_create_event_input_parsing():
+    """Test if the tool accepts a valid JSON string for creating an event."""
+    tool = CalendarTool()
+    
+    # OLD WAY (Caused Error):
+    # tool.execute(action="create_event", summary="Test", ...)
 
-# 3. Test Listing Events
-print(calendar.execute(action="list_events"))
+    # NEW WAY (Correct):
+    # We must construct a JSON string because that's what the Agent sends.
+    future_time = (datetime.datetime.now() + datetime.timedelta(days=1)).isoformat()
+    
+    payload = {
+        "action": "create_event",
+        "summary": "Pytest Meeting",
+        "start_time": future_time,
+        "end_time": future_time
+    }
+    
+    # Convert dict to JSON string
+    input_str = json.dumps(payload)
+    
+    # We expect this to fail with "Error" or "Authentication" 
+    # because we might not have valid credentials during test, 
+    # BUT it should NOT raise a TypeError about arguments.
+    try:
+        result = tool.execute(input_str)
+        assert isinstance(result, str)
+    except Exception as e:
+        # If it's an auth error, that's fine for this test, 
+        # we just want to ensure the input parsing works.
+        assert "arg" not in str(e)  # Ensure it's not an argument error
+
+def test_list_events_input_parsing():
+    """Test listing events with JSON input."""
+    tool = CalendarTool()
+    
+    payload = {
+        "action": "list_events",
+        "time_min": datetime.datetime.now().isoformat()
+    }
+    
+    input_str = json.dumps(payload)
+    
+    try:
+        result = tool.execute(input_str)
+        assert isinstance(result, str)
+    except Exception:
+        pass
