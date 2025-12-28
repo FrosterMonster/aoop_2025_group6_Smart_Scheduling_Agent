@@ -1,79 +1,31 @@
-import pytz
-from datetime import datetime, timedelta
-import dateparser
+import os
+import json
+import re
+import google.generativeai as genai  # 注意：如果安裝的是新版，這行可能略有不同
+from datetime import datetime
+from dotenv import load_dotenv
 
-# TIMEZONE used for parsing/normalization
-DEFAULT_TZ = 'Asia/Taipei'
+load_dotenv()
+genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
-def parse_nl_time(nl_time_str: str, prefer_future: bool = True) -> datetime | None:
-    """
-    解析自然語言時間字串，返回一個 timezone-aware datetime（若無法解析回傳 None）。
-
-    Examples:
-      "明天下午 2 點" -> datetime(..., tzinfo=Asia/Taipei)
-      "2025-11-03 20:00" -> datetime(..., tzinfo=Asia/Taipei)
-    """
-    if not nl_time_str or not isinstance(nl_time_str, str):
+def parse_with_ai(nl_time_str: str):
+    """使用 Gemini 解析意圖並回傳 JSON"""
+    try:
+        model = genai.GenerativeModel('gemini-flash-latest')
+        prompt = f"""
+        現在日期時間：{datetime.now().strftime('%Y-%m-%d %H:%M')}
+        使用者指令："{nl_time_str}"
+        請解析並輸出 JSON：
+        - title: 事件名稱
+        - date: YYYY-MM-DD
+        - start_time: HH:MM
+        - duration: 分鐘(數字)
+        - is_recurring: 布林值
+        """
+        response = model.generate_content(prompt)
+        # 簡單過濾掉 Markdown 標籤
+        clean_json = re.sub(r'```json|```', '', response.text).strip()
+        return json.loads(clean_json)
+    except Exception as e:
+        print(f"AI 解析失敗: {e}")
         return None
-
-    # Quick heuristic for common Chinese relative expressions (e.g., "明天下午 2 點")
-    try:
-        s = nl_time_str.strip()
-        now = datetime.now()
-        tz = pytz.timezone(DEFAULT_TZ)
-        base = None
-        if '明天' in s or '明日' in s:
-            base = now + timedelta(days=1)
-        elif '今天' in s or '今日' in s:
-            base = now
-        elif '後天' in s:
-            base = now + timedelta(days=2)
-
-        if base is not None:
-            # extract hour (Arabic numerals)
-            import re
-            m = re.search(r"(\d{1,2})", s)
-            if m:
-                hour = int(m.group(1))
-                minute = 0
-                # adjust for Chinese period words
-                if '下午' in s or '晚上' in s:
-                    if 1 <= hour <= 11:
-                        hour = hour + 12
-                if '上午' in s and hour == 12:
-                    hour = 0
-                dt = datetime(base.year, base.month, base.day, hour, minute)
-                return tz.localize(dt)
-    except Exception:
-        pass
-
-    settings = {
-        'PREFER_DATES_FROM': 'future' if prefer_future else 'past',
-        'RETURN_AS_TIMEZONE_AWARE': True,
-        'TIMEZONE': DEFAULT_TZ,
-    }
-
-    # Try parsing with Chinese language hint first, then fallback to default
-    try:
-        dt = dateparser.parse(nl_time_str, settings=settings, languages=['zh'])
-    except Exception:
-        dt = None
-
-    if dt is None:
-        # fallback: try without explicit language and without timezone-aware setting
-        dt = dateparser.parse(nl_time_str, settings={'PREFER_DATES_FROM': 'future' if prefer_future else 'past'})
-    if dt is None:
-        return None
-
-    # Ensure tz-aware and normalized to DEFAULT_TZ
-    try:
-        tz = pytz.timezone(DEFAULT_TZ)
-        if dt.tzinfo is None:
-            dt = tz.localize(dt)
-        else:
-            dt = dt.astimezone(tz)
-    except Exception:
-        # If timezone normalization fails, still return dt
-        pass
-
-    return dt
