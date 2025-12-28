@@ -142,6 +142,7 @@ def _rule_based_fallback(nl_text: str) -> Dict[str, Any]:
     # ---------- 活動標題 ----------
     title = re.sub(
         r"(明天|今天|後天|早上|上午|中午|下午|晚上|凌晨|"
+        r"找空時間|找空間時間|找有空|幫我找|有空時間|空檔|空時間|"
         r"\d+點|\d+:\d+|"
         r"[一二兩三四五六七八九十]+點|"
         r"[一二兩三四五六七八九十\d]+小時)",
@@ -239,14 +240,13 @@ def _post_process_and_validate(raw: Dict[str, Any], nl_text: str) -> List[Dict[s
         # ① 移除時間相關詞
         title = re.sub(
             r"(明天|今天|後天|本週|下週|早上|下午|晚上|上午|中午|凌晨|"
+            r"找空時間|找空間時間|找有空|幫我找|有空時間|空檔|空時間|"
             r"\d+點|\d+:\d+|"
             r"[一二兩三四五六七八九十]+點|"
             r"[一二兩三四五六七八九十\d]+小時)",
             "",
             raw_title
         )
-
-        # ② 移除結構詞，只保留事件核心
         title = re.sub(r"(有|的)", "", title).strip()
 
         # 日期
@@ -264,7 +264,15 @@ def _post_process_and_validate(raw: Dict[str, Any], nl_text: str) -> List[Dict[s
             start_time = fallback_event.get("start_time")
 
         has_explicit_time = start_time not in (None, "", "null")
-        is_flexible = not has_explicit_time
+
+        # 如果語意上是找空時間，一定是彈性
+        if any(k in nl_text for k in [
+            "找空時間", "找空間時間", "找有空", "幫我找", "空檔", "空時間"
+        ]):
+            is_flexible = True
+            start_time = None
+        else:
+            is_flexible = not has_explicit_time
 
         # ---------- 時長補強（最終正解版） ----------
 
