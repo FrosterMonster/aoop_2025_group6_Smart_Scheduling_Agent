@@ -13,16 +13,22 @@
         .btn-parse:hover { background-color: #ffc107; }
     </style>
 </head>
+
 <body>
 <div class="container py-5">
     <div class="row justify-content-center">
         <div class="col-lg-8">
+
             <div class="card hero-card p-4 mb-4 text-center">
                 <h2>📅 AI 智能全日曆助手</h2>
                 <p class="opacity-75">跨日曆衝突偵測，自動為您尋找最佳時段</p>
                 <div class="input-group mt-3">
-                    <input type="text" id="nl_input" class="form-control form-control-lg border-0" placeholder="例如：明天早上五點運動一小時...">
-                    <button class="btn btn-parse px-4" type="button" onclick="processAI()" id="ai_btn">開始解析指令</button>
+                    <input type="text" id="nl_input" class="form-control form-control-lg border-0"
+                           placeholder="例如：明天早上七點吃飯">
+                    <button class="btn btn-parse px-4" type="button"
+                            onclick="processAI()" id="ai_btn">
+                        開始解析指令
+                    </button>
                 </div>
             </div>
 
@@ -36,12 +42,13 @@
 
                 <form action="/schedule" method="POST" id="main_form">
                     <input type="hidden" name="is_flexible" id="is_flexible_field" value="false">
-                    
+
                     <div class="mb-3">
                         <label class="form-label fw-bold">活動事項</label>
-                        <input type="text" name="summary" id="summary_field" class="form-control" required placeholder="例如：慢跑">
+                        <input type="text" name="summary" id="summary_field"
+                               class="form-control" required placeholder="例如：吃飯">
                     </div>
-                    
+
                     <div class="row">
                         <div class="col-md-4 mb-3">
                             <label class="form-label">日期</label>
@@ -53,7 +60,8 @@
                         </div>
                         <div class="col-md-4 mb-3">
                             <label class="form-label">持續時數 (小時)</label>
-                            <input type="number" step="0.5" name="hours" id="hours_field" class="form-control" value="1.0">
+                            <input type="number" step="0.5" name="hours"
+                                   id="hours_field" class="form-control" value="1.0">
                         </div>
                     </div>
 
@@ -67,7 +75,10 @@
                     </div>
 
                     <div id="ai_suggestion" class="alert alert-light border d-none"></div>
-                    <button type="submit" class="btn btn-primary w-100 btn-lg shadow">確認新增至 Google 日曆</button>
+
+                    <button type="submit" class="btn btn-primary w-100 btn-lg shadow">
+                        確認新增至 Google 日曆
+                    </button>
                 </form>
             </div>
         </div>
@@ -76,11 +87,10 @@
 
 <script>
 async function processAI() {
-    const text = document.getElementById('nl_input').value;
+    const text = document.getElementById('nl_input').value.trim();
     const btn = document.getElementById('ai_btn');
-    if(!text) return;
+    if (!text) return;
 
-    // 進入讀取狀態
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 思考中...';
 
@@ -88,37 +98,39 @@ async function processAI() {
         const response = await fetch('/api/parse_nl', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({text: text})
+            body: JSON.stringify({ text })
         });
+
         const data = await response.json();
 
-        if (data.error) {
-            alert("解析失敗: " + data.error);
+        if (!data.events || data.events.length === 0) {
+            alert("解析失敗，請手動填寫");
             return;
         }
 
-        // 填入資料
-        document.getElementById('summary_field').value = data.title || "";
-        document.getElementById('date_field').value = data.date || ""; 
-        document.getElementById('hours_field').value = data.duration ? (data.duration/60).toFixed(1) : 1.0;
-        document.getElementById('start_time_field').value = data.start_time || "";
-        
-        // 判斷彈性邏輯：如果使用者沒說「幾點」，或是說了「找時間」，則為彈性
-        const isFlex = data.is_flexible === true || text.includes("有空") || text.includes("找時間");
-        document.getElementById('is_flexible_field').value = isFlex;
-        
-        const suggestion = document.getElementById('ai_suggestion');
-        suggestion.classList.remove('d-none');
-        suggestion.innerHTML = isFlex ? 
-            "✨ <b>AI 建議：</b> 系統將自動避開您的所有日曆衝突，為您找尋最佳空檔。" : 
-            "📍 <b>AI 建議：</b> 此為固定行程，將精確排定在您指定的時間。";
+        const ev = data.events[0];
 
-        if (data.is_recurring) {
-            document.getElementById('recurrence_field').value = "DAILY";
+        // === 填表單 ===
+        document.getElementById('summary_field').value = ev.title || "";
+        document.getElementById('date_field').value = ev.date || "";
+        document.getElementById('hours_field').value =
+            ev.duration ? (ev.duration / 60).toFixed(1) : 1.0;
+        document.getElementById('start_time_field').value = ev.start_time || "";
+        document.getElementById('is_flexible_field').value =
+            ev.is_flexible ? "true" : "false";
+
+        if (ev.recurrence) {
+            document.getElementById('recurrence_field').value = ev.recurrence;
         }
 
+        const suggestion = document.getElementById('ai_suggestion');
+        suggestion.classList.remove('d-none');
+        suggestion.innerHTML = ev.is_flexible
+            ? "✨ <b>AI 建議：</b> 系統將自動避開您的所有日曆衝突，為您找尋最佳空檙。"
+            : "📍 <b>AI 建議：</b> 此為固定行程，將精確排定在您指定的時間。";
+
     } catch (e) {
-        alert("連線到 AI 伺服器失敗，請手動檢查填寫。");
+        alert("連線到 AI 伺服器失敗，請手動填寫。");
     } finally {
         btn.disabled = false;
         btn.innerText = "開始解析指令";

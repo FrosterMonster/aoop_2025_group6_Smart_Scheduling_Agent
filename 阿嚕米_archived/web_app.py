@@ -34,82 +34,127 @@ def login():
 
 @app.route('/api/parse_nl', methods=['POST'])
 def api_parse_nl():
-    """處理前端傳來的自然語言，呼叫 Gemini 解析日期、時間與彈性標籤"""
     data = request.get_json()
-    user_text = data.get('text', '')
+    user_text = data.get('text', '').strip()
+
     if not user_text:
         return jsonify({'error': '沒有輸入文字'}), 400
 
-    ai_result = parse_with_ai(user_text)
-    if ai_result:
-        # ai_result 應包含 date, start_time, title, is_flexible, is_recurring
-        return jsonify(ai_result)
-    else:
-        return jsonify({'error': 'AI 解析失敗'}), 500
+    try:
+        result = parse_with_ai(user_text)
+        # ✅ 一律回 200，不管是 AI 還是 fallback
+        return jsonify(result)
+
+    except Exception as e:
+        print("[PARSE_NL ERROR]", e)
+        return jsonify({'error': '解析失敗'}), 500
 
 @app.route('/schedule', methods=['GET', 'POST'])
 @login_required
 def schedule():
     if request.method == 'POST':
-        summary = request.form.get('summary')
-        hours = float(request.form.get('hours', 1.0))
-        is_flexible = request.form.get('is_flexible') == 'true'
-        start_time_str = request.form.get('start_time')
-        recurrence = request.form.get('recurrence')
-        
-        # 接收解析日期，若無則預設為今天
-        target_date = request.form.get('date') or datetime.now().strftime('%Y-%m-%d')
-
         try:
             service = get_calendar_service()
-            
-            if is_flexible:
-                # 模式 A: 跨日曆自動搜尋空檔
-                # 傳入 target_date 讓搜尋從指定的日期開始
-                planned_events = plan_week_schedule(service, summary, hours, start_from=target_date)
-                
-                if planned_events:
-                    for p in planned_events:
-                        event_body = {
-                            'summary': summary,
-                            'start': {'dateTime': p['start'].isoformat(), 'timeZone': 'Asia/Taipei'},
-                            'end': {'dateTime': p['end'].isoformat(), 'timeZone': 'Asia/Taipei'},
-                            'description': 'AI 跨日曆偵測後自動排入'
-                        }
-                        service.events().insert(calendarId='primary', body=event_body).execute()
-                    
-                    # 格式化前端顯示的時間
-                    for p in planned_events:
-                        p['time'] = p['start'].strftime('%Y-%m-%d %H:%M')
-                    return render_template('schedule.html', success=True, events=planned_events)
-                else:
-                    return render_template('schedule.html', error="抱歉，所選日期的所有日曆皆已客滿，找不到空檔。")
 
+            # ---------- 來自前端的基本資料 ----------
+            summary = request.form.get('summary', '').strip()
+            hours = float(request.form.get('hours', 1.0) or 1.0)
+            target_date = request.form.get('date') or datetime.now().strftime('%Y-%m-%d')
+            start_time_str = request.form.get('start_time')
+            recurrence = request.form.get('recurrence') or None
+            is_flexible = request.form.get('is_flexible') == 'true'
+
+            inserted_events = []
+            errors = []
+
+            # ---------- 情況 A：彈性行程 ----------
+            if is_flexible:
+                planned = plan_week_schedule(
+                    service,
+                    summary,
+                    hours,
+                    start_from=target_date
+                )
+
+                if not planned:
+                    return render_template(
+                        'schedule.html',
+                        error="找不到可用的空檔，請嘗試其他日期或縮短時數。"
+                    )
+
+                for p in planned:
+                    event_body = {
+                        'summary': summary,
+                        'start': {
+                            'dateTime': p['start'].isoformat(),
+                            'timeZone': 'Asia/Taipei'
+                        },
+                        'end': {
+                            'dateTime': p['end'].isoformat(),
+                            'timeZone': 'Asia/Taipei'
+                        },
+                        'description': 'AI 自動排入（彈性行程）'
+                    }
+
+                    service.events().insert(
+                        calendarId='primary',
+                        body=event_body
+                    ).execute()
+
+                    inserted_events.append({
+                        'time': p['start'].strftime('%Y-%m-%d %H:%M'),
+                        'result': '彈性行程已新增'
+                    })
+
+            # ---------- 情況 B：固定行程 ----------
             else:
-                # 模式 B: 固定時間行程
-                start_dt = datetime.strptime(f"{target_date} {start_time_str}", '%Y-%m-%d %H:%M')
+                if not start_time_str:
+                    raise ValueError("固定行程必須指定開始時間")
+
+                start_dt = datetime.strptime(
+                    f"{target_date} {start_time_str}",
+                    '%Y-%m-%d %H:%M'
+                )
                 end_dt = start_dt + timedelta(hours=hours)
 
                 event_body = {
                     'summary': summary,
-                    'start': {'dateTime': start_dt.isoformat(), 'timeZone': 'Asia/Taipei'},
-                    'end': {'dateTime': end_dt.isoformat(), 'timeZone': 'Asia/Taipei'},
+                    'start': {
+                        'dateTime': start_dt.isoformat(),
+                        'timeZone': 'Asia/Taipei'
+                    },
+                    'end': {
+                        'dateTime': end_dt.isoformat(),
+                        'timeZone': 'Asia/Taipei'
+                    }
                 }
-                
-                # 處理重複性行程（如每天、每週）
+
+                # recurrence（正確套用）
                 if recurrence == 'DAILY':
                     event_body['recurrence'] = ['RRULE:FREQ=DAILY']
                 elif recurrence == 'WEEKLY':
                     event_body['recurrence'] = ['RRULE:FREQ=WEEKLY']
 
-                service.events().insert(calendarId='primary', body=event_body).execute()
-                return render_template('schedule.html', success=True, 
-                                       events=[{'time': f"{target_date} {start_time_str}", 'result': '固定行程已成功新增'}])
+                service.events().insert(
+                    calendarId='primary',
+                    body=event_body
+                ).execute()
+
+                inserted_events.append({
+                    'time': f"{target_date} {start_time_str}",
+                    'result': '固定行程已新增'
+                })
+
+            return render_template(
+                'schedule.html',
+                success=True,
+                events=inserted_events
+            )
 
         except Exception as e:
             return render_template('schedule.html', error=str(e))
 
-    # GET 請求時直接返回排程頁面
+    # GET
     return render_template('schedule.html')
 
 if __name__ == '__main__':

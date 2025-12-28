@@ -1,69 +1,196 @@
 import os
 import json
 import re
-import google.generativeai as genai  # 注意：如果安裝的是新版，這行可能略有不同
-from datetime import datetime
+from datetime import datetime, timedelta
+from typing import List, Dict, Any
+
+from google import genai
 from dotenv import load_dotenv
+from google.genai.errors import ClientError
 
+
+# ---------- 基本設定 ----------
 load_dotenv()
-genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
-def parse_with_ai(nl_time_str: str):
-    """強化版解析器：精確抓取名稱、日期與時間"""
+# ✅ 新 SDK 初始化方式（重點）
+client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
+
+# ✅ 使用你帳號確定能用、最穩的模型
+MODEL_NAME = "models/gemini-flash-latest"
+TZ = "Asia/Taipei"
+
+
+# ---------- 公開介面 ----------
+def parse_with_ai(nl_text: str) -> Dict[str, Any]:
+    """
+    AI-first + rule-based fallback
+    """
     try:
-        # 使用你清單中有的模型
-        model = genai.GenerativeModel('gemini-2.0-flash') 
-        
-        # 極簡化的 Prompt，降低 AI 亂跑的機率
-        prompt = f"""
-        現在時間：{datetime.now().strftime('%Y-%m-%d %H:%M')}
-        指令："{nl_time_str}"
-        
-請將指令轉化為 JSON，規則如下：
-        1. title: 提取活動主體（如：洗澡、運動）。
-        2. date: 計算起始日期（YYYY-MM-DD）。
-        3. start_time: 開始時間（HH:MM）。
-        4. duration: 若指令有結束時間（如九點到十點），請計算分鐘數（此例為 60）。
-        5. is_recurring: 若提到「每天」、「每週」設為 true。
-        6. recurrence: 週期模式，填入 "DAILY" 或 "WEEKLY" 或 null。
-        7. is_flexible: 有具體時間點(如:九點) 必須設為 false。
-        
-        僅輸出 JSON：
-        {{
-          "title": "活動名稱",
-          "date": "YYYY-MM-DD",
-          "start_time": "HH:MM",
-          "duration": 60,
-          "is_recurring": false,
-          "recurrence": null,
-          "is_flexible": false
-        }}
-        """
-        response = model.generate_content(prompt)
-        text = response.text
-        
-        # 增加正則表達式，確保只拿 {} 裡面的資料
-        match = re.search(r'\{.*\}', text, re.DOTALL)
-        if match:
-            data = json.loads(match.group())
-            
-            # --- 後處理補強 (Double Check) ---
-            # 如果 AI 沒讀到名稱，從原始字串抓
-            if not data.get('title') or data['title'] == '事件':
-                data['title'] = nl_time_str.split(' ')[0]
-            
-            # 強制日期計算補強
-            if '明天' in nl_time_str:
-                data['date'] = (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d')
-            
-            # 強制時間補強
-            if '五點' in nl_time_str:
-                data['start_time'] = '05:00'
-                data['is_flexible'] = False
-                
-            return data
-            
-        return None
+        raw = _llm_parse(nl_text)
+        events = _post_process_and_validate(raw, nl_text)
+        return {"events": events}
+
+    except ClientError as e:
+        # 👉 AI quota / client error
+        if e.code == 429:
+            print("[AI QUOTA EXCEEDED] fallback used")
+        else:
+            print("[AI CLIENT ERROR]", e)
+
     except Exception as e:
-        print(f"AI 解析失敗: {e}")
-        return None
+        # 👉 其他 parsing 錯誤
+        print("[AI PARSE ERROR]", e)
+
+    # ✅ 關鍵：一定要回 fallback
+    return _rule_based_fallback(nl_text)
+
+
+def _rule_based_fallback(nl_text: str) -> Dict[str, Any]:
+    """
+    AI quota / error 時的最小可用 parser
+    """
+    today = datetime.now().date()
+
+    # 日期
+    date = today
+    if "明天" in nl_text:
+        date = today + timedelta(days=1)
+
+    start_time = None
+    is_flexible = True
+
+    # 只抓「X點 / X:MM」
+    time_match = re.search(r'(\d{1,2})\s*(?:點|:)(\d{1,2})?', nl_text)
+    if time_match:
+        hour = int(time_match.group(1))
+        minute = int(time_match.group(2) or 0)
+
+        # 中文時間語意修正
+        if "下午" in nl_text or "晚上" in nl_text:
+            if hour < 12:
+                hour += 12
+
+        if "早上" in nl_text or "上午" in nl_text:
+            if hour == 12:
+                hour = 0
+
+        start_time = f"{hour:02d}:{minute:02d}"
+        is_flexible = False
+
+    return {
+        "events": [
+            {
+                "title": nl_text.split()[0],
+                "date": date.strftime("%Y-%m-%d"),
+                "start_time": start_time,
+                "duration": 60,
+                "is_flexible": is_flexible,
+                "is_recurring": False,
+                "recurrence": None
+            }
+        ]
+    }
+
+
+# ---------- Step 1：LLM 解析（只負責 AI） ----------
+def _llm_parse(nl_text: str) -> Dict[str, Any]:
+    """
+    呼叫 Gemini，將自然語言轉為 JSON
+    """
+    prompt = f"""
+現在時間：{datetime.now().strftime('%Y-%m-%d %H:%M')}
+使用者指令：「{nl_text}」
+
+請將指令解析為 JSON，允許多個事件。
+
+規則：
+1. 沒有明確時間 → is_flexible = true
+2. 有明確時間 → is_flexible = false
+3. duration 單位：分鐘
+4. date 格式：YYYY-MM-DD
+5. start_time 若沒有請填 null
+6. recurrence 只允許 DAILY / WEEKLY / null
+
+只輸出 JSON：
+
+{{
+  "events": [
+    {{
+      "title": "活動名稱",
+      "date": "YYYY-MM-DD",
+      "start_time": "HH:MM 或 null",
+      "duration": 60,
+      "is_flexible": true,
+      "is_recurring": false,
+      "recurrence": null
+    }}
+  ]
+}}
+"""
+
+    response = client.models.generate_content(
+        model=MODEL_NAME,
+        contents=prompt
+    )
+
+    text = response.text.strip()
+    text = text.replace("```json", "").replace("```", "").strip()
+
+    match = re.search(r"\{.*\}", text, re.DOTALL)
+    if not match:
+        raise ValueError("LLM 未回傳合法 JSON")
+
+    return json.loads(match.group())
+
+
+# ---------- Step 2：後處理 + 規則修正 ----------
+def _post_process_and_validate(raw: Dict[str, Any], nl_text: str) -> List[Dict[str, Any]]:
+    """
+    修正 AI 結果，確保符合系統規則
+    """
+    if "events" not in raw or not isinstance(raw["events"], list):
+        raise ValueError("AI 回傳格式錯誤，缺少 events")
+
+    today = datetime.now().date()
+    results = []
+
+    for ev in raw["events"]:
+        title = ev.get("title") or nl_text.split()[0]
+
+        # 日期
+        date_str = ev.get("date")
+        date = datetime.strptime(date_str, "%Y-%m-%d").date() if date_str else today
+        if "明天" in nl_text:
+            date = today + timedelta(days=1)
+
+        # 時間
+        start_time = ev.get("start_time")
+
+        # AI 沒抓到時間，但文字裡有時間 → 用 rule-based 補
+        if not start_time:
+            fallback = _rule_based_fallback(nl_text)
+            fb_event = fallback["events"][0]
+            start_time = fb_event.get("start_time")
+
+        has_explicit_time = start_time not in (None, "", "null")
+        is_flexible = not has_explicit_time
+
+        # 時長
+        duration = int(ev.get("duration") or 60)
+
+        # recurrence
+        recurrence = ev.get("recurrence")
+        if recurrence not in ("DAILY", "WEEKLY"):
+            recurrence = None
+
+        results.append({
+            "title": title,
+            "date": date.strftime("%Y-%m-%d"),
+            "start_time": start_time if has_explicit_time else None,
+            "duration": duration,
+            "is_flexible": is_flexible,
+            "is_recurring": recurrence is not None,
+            "recurrence": recurrence,
+        })
+
+    return results
