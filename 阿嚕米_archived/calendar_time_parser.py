@@ -34,6 +34,14 @@ CHINESE_NUM_MAP = {
     "九": 9,
     "十": 10,
 }
+
+def normalize_chinese_duration(text: str) -> str:
+    def repl(match):
+        zh_num = match.group(1)
+        return f"{chinese_to_int(zh_num)}小時"
+
+    return re.sub(r'([一二兩三四五六七八九十]{1,3})小時', repl, text)
+
 def normalize_chinese_time(text: str) -> str:
     def repl(match):
         zh_num = match.group(1)
@@ -69,6 +77,8 @@ def parse_with_ai(nl_text: str) -> Dict[str, Any]:
 def _rule_based_fallback(nl_text: str) -> Dict[str, Any]:
 
     text = normalize_chinese_time(nl_text)
+    text = normalize_chinese_duration(text)
+
 
     """
     AI quota / error 時的最小可用 parser
@@ -119,8 +129,6 @@ def _rule_based_fallback(nl_text: str) -> Dict[str, Any]:
         if m:
             duration = chinese_to_int(m.group(1)) * 60
 
-    if duration_match:
-        duration = int(duration_match.group(1)) * 60
     title = re.sub(
         r"(明天|今天|後天|早上|下午|晚上|上午|中午|凌晨|"
         r"\d+點|\d+:\d+|"
