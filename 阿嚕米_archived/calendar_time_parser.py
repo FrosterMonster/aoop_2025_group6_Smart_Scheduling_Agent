@@ -63,6 +63,7 @@ def parse_with_ai(nl_text: str) -> Dict[str, Any]:
 def _rule_based_fallback(nl_text: str) -> Dict[str, Any]:
 
     text = nl_text  # 用副本，不污染原始輸入
+    text = normalize_chinese_time(text)
 
     """
     AI quota / error 時的最小可用 parser
@@ -77,8 +78,12 @@ def _rule_based_fallback(nl_text: str) -> Dict[str, Any]:
     start_time = None
     is_flexible = True
 
-    for zh, num in CHINESE_NUM_MAP.items():
-        text = text.replace(f"{zh}點", f"{num}點")
+    def normalize_chinese_time(text: str) -> str:
+        def repl(match):
+            zh_num = match.group(1)
+            return f"{chinese_to_int(zh_num)}點"
+
+        return re.sub(r'([一二兩三四五六七八九十]{1,3})點', repl, text)
 
     for zh, num in CHINESE_NUM_MAP.items():
         text = text.replace(f"{zh}小時", f"{num}小時")
@@ -260,3 +265,15 @@ def _post_process_and_validate(raw: Dict[str, Any], nl_text: str) -> List[Dict[s
         })
 
     return results
+
+def chinese_to_int(s: str) -> int:
+    if s == "十":
+        return 10
+    if s.startswith("十"):
+        return 10 + CHINESE_NUM_MAP.get(s[1], 0)
+    if s.endswith("十"):
+        return CHINESE_NUM_MAP.get(s[0], 0) * 10
+    if "十" in s:
+        left, right = s.split("十")
+        return CHINESE_NUM_MAP.get(left, 0) * 10 + CHINESE_NUM_MAP.get(right, 0)
+    return CHINESE_NUM_MAP.get(s, 0)
