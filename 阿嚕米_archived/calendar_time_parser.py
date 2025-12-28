@@ -233,16 +233,16 @@ def _post_process_and_validate(raw: Dict[str, Any], nl_text: str) -> List[Dict[s
         has_explicit_time = start_time not in (None, "", "null")
         is_flexible = not has_explicit_time
 
-        # ---------- 時長補強（最終版） ----------
+        # ---------- 時長補強（最終正解版） ----------
 
-        # 1. 預設用 AI 的
-        duration = ev.get("duration")
+        # 一律先用 fallback（語意確定）
+        duration = fallback_event.get("duration")
 
-        # 2. 只要文字裡有「小時」，一定以 rule-based 為準
-        if "小時" in nl_text:
-            duration = fallback_event.get("duration")
+        # 如果 fallback 沒算到，再退回 AI
+        if not duration:
+            duration = ev.get("duration")
 
-        # 3. 防呆
+        # 防呆
         duration = int(duration or 60)
 
         # recurrence
