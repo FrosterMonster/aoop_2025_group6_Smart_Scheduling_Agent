@@ -1,17 +1,16 @@
 from langchain_openai import ChatOpenAI
 from langchain_core.tools import Tool
-# ▼▼▼ 修改這裡：使用更穩健的導入方式 ▼▼▼
-from langchain.agents import AgentExecutor
-try:
-    from langchain.agents import create_react_agent
-except ImportError:
-    from langchain.agents.react.agent import create_react_agent
-# ▲▲▲ 修改結束 ▲▲▲
-
 from langchain_core.prompts import PromptTemplate
 from langchain.memory import ConversationBufferMemory
 from src.tools.base import AgentTool
 import os
+
+# ▼▼▼【關鍵修改】強制指向檔案的絕對路徑 ▼▼▼
+# 不要寫 from langchain.agents import ...
+# 改用下面這兩行，直接深入到檔案層級去抓
+from langchain.agents.agent import AgentExecutor
+from langchain.agents.react.agent import create_react_agent
+# ▲▲▲ 修改結束 ▲▲▲
 
 # --- Prompt 維持不變 ---
 CUSTOM_SYSTEM_PROMPT = """
