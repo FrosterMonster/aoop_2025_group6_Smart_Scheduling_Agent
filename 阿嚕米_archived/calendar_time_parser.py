@@ -91,14 +91,19 @@ def _rule_based_fallback(nl_text: str) -> Dict[str, Any]:
         hour = int(time_match.group(1))
         minute = int(time_match.group(2) or 0)
 
-        # 中文時間語意修正
-        if "下午" in nl_text or "晚上" in nl_text:
-            if hour < 12:
-                hour += 12
+    # 中文時間語意修正（順序很重要）
+    if "中午" in nl_text:
+        # 中午 11 點 → 11:00
+        # 中午 12 點 → 12:00
+        pass
 
-        if "早上" in nl_text or "上午" in nl_text:
-            if hour == 12:
-                hour = 0
+    elif "下午" in nl_text or "晚上" in nl_text:
+        if hour < 12:
+            hour += 12
+
+    elif "早上" in nl_text or "上午" in nl_text:
+        if hour == 12:
+            hour = 0
 
         start_time = f"{hour:02d}:{minute:02d}"
         is_flexible = False
