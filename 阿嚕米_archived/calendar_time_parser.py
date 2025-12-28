@@ -75,37 +75,38 @@ def parse_with_ai(nl_text: str) -> Dict[str, Any]:
 
 
 def _rule_based_fallback(nl_text: str) -> Dict[str, Any]:
+    """
+    Rule-based fallback parser
+    - 只解析「文字中明確出現」的資訊
+    - 不做推測
+    """
 
+    # ---------- 前處理（中文數字正規化） ----------
     text = normalize_chinese_time(nl_text)
     text = normalize_chinese_duration(text)
 
-
-    """
-    AI quota / error 時的最小可用 parser
-    """
     today = datetime.now().date()
 
-    # 日期
+    # ---------- 日期 ----------
     date = today
     if "明天" in nl_text:
         date = today + timedelta(days=1)
+    elif "後天" in nl_text:
+        date = today + timedelta(days=2)
 
+    # ---------- 開始時間 ----------
     start_time = None
     is_flexible = True
 
     time_match = re.search(r'(\d{1,2})\s*(?:點|:)(\d{1,2})?', text)
-    duration_match = re.search(r'(\d+)\s*小時', text)
-
-    
     if time_match:
         hour = int(time_match.group(1))
         minute = int(time_match.group(2) or 0)
 
+        # 中文時段語意修正
         if "中午" in nl_text:
-            # 中午 12 點是 12:00
-            if hour == 12:
-                pass
-            # 中午 1~11 點通常是 11:00 之前（你可自行決定）
+            if hour < 11:
+                hour = 12
         elif "下午" in nl_text or "晚上" in nl_text:
             if hour < 12:
                 hour += 12
@@ -116,21 +117,22 @@ def _rule_based_fallback(nl_text: str) -> Dict[str, Any]:
         start_time = f"{hour:02d}:{minute:02d}"
         is_flexible = False
 
-    # --- duration 解析（小時） ---
+    # ---------- 時長（分鐘） ----------
     duration = 60  # 預設 1 小時
 
-    # 1️⃣ 數字小時：3小時
+    # 阿拉伯數字：3小時
     m = re.search(r'(\d+)\s*小時', text)
     if m:
         duration = int(m.group(1)) * 60
     else:
-        # 2️⃣ 中文小時：三小時
+        # 中文數字：三小時
         m = re.search(r'([一二兩三四五六七八九十]+)小時', text)
         if m:
             duration = chinese_to_int(m.group(1)) * 60
 
+    # ---------- 活動標題 ----------
     title = re.sub(
-        r"(明天|今天|後天|早上|下午|晚上|上午|中午|凌晨|"
+        r"(明天|今天|後天|早上|上午|中午|下午|晚上|凌晨|"
         r"\d+點|\d+:\d+|"
         r"[一二兩三四五六七八九十]+點|"
         r"[一二兩三四五六七八九十\d]+小時)",
@@ -138,6 +140,10 @@ def _rule_based_fallback(nl_text: str) -> Dict[str, Any]:
         nl_text
     )
     title = re.sub(r"(有|的)", "", title).strip()
+
+    # 保底
+    if not title:
+        title = "未命名活動"
 
     return {
         "events": [
