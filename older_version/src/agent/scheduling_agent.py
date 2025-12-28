@@ -27,8 +27,7 @@ class SchedulingAgent:
         if not os.getenv("GOOGLE_API_KEY"):
             raise ValueError("GOOGLE_API_KEY not found. Check your .env file.")
         
-        self._llm = ChatGoogleGenerativeAI(model="gemini-exp-1206", temperature=0)
-
+        self._llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash-exp", temperature=0)
         # 3. Pull the Prompt
         prompt = hub.pull("hwchase17/react")
         
