@@ -131,21 +131,23 @@ def find_free_slots_between(start_dt: datetime, end_dt: datetime, busy_periods: 
     return free_slots
 
 
-def plan_week_schedule(service, summary, total_hours, daily_window=(9, 21), start_from=None):
+def plan_week_schedule(service, summary, total_hours, daily_window=(5, 23), start_from=None):
     """
     搜尋未來 7 天內的空檔，避開所有日曆忙碌時段。
+    修正點：精確處理 start_from 與現在時間的關係，確保「明早五點」不會跳過。
     """
-    calendar_ids = get_all_calendar_ids(service) # 讀取包含家教、上課等所有日曆
+    calendar_ids = get_all_calendar_ids(service)
+    tz = pytz.timezone(TIMEZONE)
     
-    # --- 關鍵修正 A：處理起始日期 ---
+    # --- 1. 決定搜尋的起點日期 ---
     if start_from:
-        # 轉換前端傳來的 YYYY-MM-DD，並從該日的 00:00 開始找
-        search_start = datetime.strptime(start_from, '%Y-%m-%d')
+        # 即使是明天，也先轉為該日凌晨 00:00
+        base_date = datetime.strptime(start_from, '%Y-%m-%d')
+        search_start = tz.localize(base_date.replace(hour=0, minute=0, second=0))
     else:
-        # 如果沒指定，則從現在開始找
-        search_start = datetime.now()
-    
-    # 準備 FreeBusy 查詢：從指定的起始日開始檢查未來 7 天
+        search_start = datetime.now(tz)
+
+    # --- 2. 取得忙碌時段 (一次查詢 7 天) ---
     time_min = search_start.astimezone(pytz.utc).isoformat()
     time_max = (search_start + timedelta(days=7)).astimezone(pytz.utc).isoformat()
     
@@ -155,48 +157,53 @@ def plan_week_schedule(service, summary, total_hours, daily_window=(9, 21), star
         "items": [{"id": cid} for cid in calendar_ids]
     }
     
-    # 向 Google 詢問哪些時段是忙碌的
     freebusy_res = service.freebusy().query(body=body).execute()
-    
     all_busy_periods = []
     for cal_id in calendar_ids:
-        periods = freebusy_res['calendars'].get(cal_id, {}).get('busy', [])
-        all_busy_periods.extend(periods)
+        all_busy_periods.extend(freebusy_res['calendars'].get(cal_id, {}).get('busy', []))
     
-    # --- 關鍵修正 B：搜尋起點設定 ---
-    # 設定測試起點為 search_start 的整點
-    test_start = search_start.replace(minute=0, second=0, microsecond=0)
-    if not start_from: # 如果是今天，則往後推一小時避免排在過去
-        test_start += timedelta(hours=1)
+    # --- 3. 設定搜尋的「第一個小時」 ---
+    # 預設從該日期的 daily_window 開始時間 (例如 05:00) 開始找
+    test_start = search_start.replace(hour=daily_window[0], minute=0, second=0, microsecond=0)
     
-    for _ in range(168): 
-        # 檢查是否在允許的每日時間窗內 (9:00 - 21:00)
+    # 重要修正：如果搜尋的是「今天」，且現在時間已經超過視窗起點，則從「下一小時」開始找
+    now_local = datetime.now(tz)
+    if test_start < now_local:
+        test_start = now_local.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+    
+    # --- 4. 進行 168 小時遞增搜尋 ---
+    for _ in range(168):
+        # 檢查是否在每日允許的視窗內 (例如 5:00 ~ 23:00)
         if test_start.hour < daily_window[0] or test_start.hour >= daily_window[1]:
             test_start += timedelta(hours=1)
             continue
             
         test_end = test_start + timedelta(hours=total_hours)
         
-        # 衝突偵測邏輯
+        # 衝突偵測
         is_conflict = False
         for busy in all_busy_periods:
-            b_start = datetime.fromisoformat(busy['start'].replace('Z', '+00:00'))
-            b_end = datetime.fromisoformat(busy['end'].replace('Z', '+00:00'))
-            # 判斷重疊
-            if not (test_end.astimezone(pytz.utc) <= b_start or test_start.astimezone(pytz.utc) >= b_end):
+            # 將 Google 回傳的 Z 結尾時間轉為本地時區進行比較
+            b_start = datetime.fromisoformat(busy['start'].replace('Z', '+00:00')).astimezone(tz)
+            b_end = datetime.fromisoformat(busy['end'].replace('Z', '+00:00')).astimezone(tz)
+            
+            # 若時間有重疊則視為衝突
+            if not (test_end <= b_start or test_start >= b_end):
                 is_conflict = True
                 break
         
         if not is_conflict:
+            # 找到第一個可用的空檔
             return [{
                 'start': test_start,
                 'end': test_end,
-                'result': f"避開了您的{len(calendar_ids)}個日曆，找到空檔！"
+                'result': f"避開了您的所有日曆衝突，成功排入！"
             }]
         
         test_start += timedelta(hours=1)
     
-    raise Exception("抱歉，這週您的所有日曆都是滿的！")
+    raise Exception("抱歉，未來一週您的日曆已滿，無法安排該行程。")
+
 # 獨立測試區塊
 if __name__ == '__main__':
     # 計算一個未來時間，例如現在時間的 30 分鐘後到 60 分鐘後
