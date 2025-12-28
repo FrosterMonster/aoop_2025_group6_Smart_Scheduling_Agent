@@ -1,4 +1,3 @@
-# CHANGE 1: Import Google Gemini instead of OpenAI
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.tools import Tool
 from langchain.agents import create_react_agent, AgentExecutor
@@ -29,8 +28,9 @@ class SchedulingAgent:
         if not os.getenv("GOOGLE_API_KEY"):
             raise ValueError("GOOGLE_API_KEY not found in environment variables")
             
-        # We use 'gemini-1.5-flash' or 'gemini-pro' as the model
-        self._llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0)
+        # FIX: We use 'gemini-pro' because it is the standard model supported 
+        # by the stable version of the library we installed.
+        self._llm = ChatGoogleGenerativeAI(model="gemini-pro", temperature=0)
 
         # 3. Pull the Prompt
         # This downloads a standard "Reason+Act" prompt template
@@ -43,10 +43,21 @@ class SchedulingAgent:
         self._executor = AgentExecutor(agent=agent_construct, tools=self._langchain_tools, verbose=True)
 
     def run(self, user_query: str):
+        """
+        Executes the agent workflow on a user query.
+        """
         try:
-            return self._executor.invoke({"input": user_query})["output"]
+            # The executor runs the "Thought -> Action -> Observation" loop
+            response = self._executor.invoke({"input": user_query})
+            return response["output"]
         except Exception as e:
             return f"Agent failed: {e}"
 
     def __call__(self, user_query: str):
+        """
+        Magic method: Allows the object to be called like a function.
+        """
         return self.run(user_query)
+
+    def __repr__(self):
+        return f"<SchedulingAgent(tools={len(self._tools)})>"
