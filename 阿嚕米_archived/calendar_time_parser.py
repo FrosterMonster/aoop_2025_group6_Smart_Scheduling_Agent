@@ -268,6 +268,15 @@ def _post_process_and_validate(raw: Dict[str, Any], nl_text: str) -> List[Dict[s
         # 如果 title 還以「找」開頭，代表是調度語意，去掉「找」
         if title.startswith("找"):
             title = title[1:].strip()
+        # 如果還包含「時間 / 空檔 / 空閒」這類調度殘留，直接拿掉
+        SCHEDULING_NOISE_WORDS = [
+            "時間", "空閒", "空檔", "空間"
+        ]
+
+        for w in SCHEDULING_NOISE_WORDS:
+            title = title.replace(w, "")
+
+        title = title.strip()
 
 
         # 如果清完只剩一個動詞或空白，保底
