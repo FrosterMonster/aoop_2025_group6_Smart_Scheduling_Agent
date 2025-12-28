@@ -35,6 +35,20 @@ CHINESE_NUM_MAP = {
     "十": 10,
 }
 
+def normalize_chinese_duration(text: str) -> str:
+    def repl(match):
+        zh_num = match.group(1)
+        return f"{chinese_to_int(zh_num)}小時"
+
+    return re.sub(r'([一二兩三四五六七八九十]{1,3})小時', repl, text)
+
+def normalize_chinese_time(text: str) -> str:
+    def repl(match):
+        zh_num = match.group(1)
+        return f"{chinese_to_int(zh_num)}點"
+
+    return re.sub(r'([一二兩三四五六七八九十]{1,3})點', repl, text)
+
 # ---------- 公開介面 ----------
 def parse_with_ai(nl_text: str) -> Dict[str, Any]:
     """
@@ -61,60 +75,74 @@ def parse_with_ai(nl_text: str) -> Dict[str, Any]:
 
 
 def _rule_based_fallback(nl_text: str) -> Dict[str, Any]:
-
-    text = nl_text  # 用副本，不污染原始輸入
-
     """
-    AI quota / error 時的最小可用 parser
+    Rule-based fallback parser
+    - 只解析「文字中明確出現」的資訊
+    - 不做推測
     """
+
+    # ---------- 前處理（中文數字正規化） ----------
+    text = normalize_chinese_time(nl_text)
+    text = normalize_chinese_duration(text)
+
     today = datetime.now().date()
 
-    # 日期
+    # ---------- 日期 ----------
     date = today
     if "明天" in nl_text:
         date = today + timedelta(days=1)
+    elif "後天" in nl_text:
+        date = today + timedelta(days=2)
 
+    # ---------- 開始時間 ----------
     start_time = None
     is_flexible = True
 
-    for zh, num in CHINESE_NUM_MAP.items():
-        text = text.replace(f"{zh}點", f"{num}點")
-
-    for zh, num in CHINESE_NUM_MAP.items():
-        text = text.replace(f"{zh}小時", f"{num}小時")
-
     time_match = re.search(r'(\d{1,2})\s*(?:點|:)(\d{1,2})?', text)
-    duration_match = re.search(r'(\d+)\s*小時', text)
-
-    
     if time_match:
         hour = int(time_match.group(1))
         minute = int(time_match.group(2) or 0)
 
-    # 中文時間語意修正（順序很重要）
-    if "中午" in nl_text:
-        # 中午 11 點 → 11:00
-        # 中午 12 點 → 12:00
-        pass
-
-    elif "下午" in nl_text or "晚上" in nl_text:
-        if hour < 12:
-            hour += 12
-
-    elif "早上" in nl_text or "上午" in nl_text:
-        if hour == 12:
-            hour = 0
+        # 中文時段語意修正
+        if "中午" in nl_text:
+            if hour < 11:
+                hour = 12
+        elif "下午" in nl_text or "晚上" in nl_text:
+            if hour < 12:
+                hour += 12
+        elif "早上" in nl_text or "上午" in nl_text:
+            if hour == 12:
+                hour = 0
 
         start_time = f"{hour:02d}:{minute:02d}"
         is_flexible = False
+    # ---------- 語意型彈性事件 ----------
+    # 像是「找空時間 / 幫我找 / 有空的時候」
+    SEMANTIC_FLEXIBLE_KEYWORDS = [
+        "找空時間", "找有空", "有空時間", "幫我找", "空檔", "空時間"
+    ]
 
-    # --- duration 解析（小時） ---
+    if any(k in nl_text for k in SEMANTIC_FLEXIBLE_KEYWORDS):
+        start_time = None
+        is_flexible = True
+
+    # ---------- 時長（分鐘） ----------
     duration = 60  # 預設 1 小時
 
-    if duration_match:
-        duration = int(duration_match.group(1)) * 60
+    # 阿拉伯數字：3小時
+    m = re.search(r'(\d+)\s*小時', text)
+    if m:
+        duration = int(m.group(1)) * 60
+    else:
+        # 中文數字：三小時
+        m = re.search(r'([一二兩三四五六七八九十]+)小時', text)
+        if m:
+            duration = chinese_to_int(m.group(1)) * 60
+
+    # ---------- 活動標題 ----------
     title = re.sub(
-        r"(明天|今天|後天|早上|下午|晚上|上午|中午|凌晨|"
+        r"(明天|今天|後天|早上|上午|中午|下午|晚上|凌晨|"
+        r"找空時間|找空間時間|找有空|幫我找|有空時間|空檔|空時間|"
         r"\d+點|\d+:\d+|"
         r"[一二兩三四五六七八九十]+點|"
         r"[一二兩三四五六七八九十\d]+小時)",
@@ -122,6 +150,10 @@ def _rule_based_fallback(nl_text: str) -> Dict[str, Any]:
         nl_text
     )
     title = re.sub(r"(有|的)", "", title).strip()
+
+    # 保底
+    if not title:
+        title = "未命名活動"
 
     return {
         "events": [
@@ -208,15 +240,76 @@ def _post_process_and_validate(raw: Dict[str, Any], nl_text: str) -> List[Dict[s
         # ① 移除時間相關詞
         title = re.sub(
             r"(明天|今天|後天|本週|下週|早上|下午|晚上|上午|中午|凌晨|"
+            r"找空時間|找空間時間|找有空|幫我找|有空時間|空檔|空時間|"
             r"\d+點|\d+:\d+|"
             r"[一二兩三四五六七八九十]+點|"
             r"[一二兩三四五六七八九十\d]+小時)",
             "",
             raw_title
         )
-
-        # ② 移除結構詞，只保留事件核心
         title = re.sub(r"(有|的)", "", title).strip()
+
+        # ---------- 最終語意清洗（活動本體抽取） ----------
+        # 專門處理：找空時間讀書 / 幫我找時間運動 / 找空檔寫作
+
+        SEMANTIC_CLEAN_PATTERNS = [
+            r"找.*時間",
+            r"找.*空",
+            r"幫我找",
+            r"安排",
+        ]
+
+        for p in SEMANTIC_CLEAN_PATTERNS:
+            title = re.sub(p, "", title)
+
+        title = title.strip()
+        # ---------- 最後一道：活動本體修正 ----------
+
+        # 如果 title 還以「找」開頭，代表是調度語意，去掉「找」
+        if title.startswith("找"):
+            title = title[1:].strip()
+        # 如果還包含「時間 / 空檔 / 空閒」這類調度殘留，直接拿掉
+        SCHEDULING_NOISE_WORDS = [
+            "時間", "空閒", "空檔", "空間"
+        ]
+
+        for w in SCHEDULING_NOISE_WORDS:
+            title = title.replace(w, "")
+
+        title = title.strip()
+
+        # ---------- 活動本體最終抽取（教科書級） ----------
+
+        COMMON_ACTIVITIES = [
+            "讀書", "看書", "運動", "跑步", "打球", "吃飯",
+            "開會", "會議", "寫作", "寫報告", "看電影", "休息"
+        ]
+
+        for act in COMMON_ACTIVITIES:
+            if act in title:
+                title = act
+                break
+
+        # 如果清完只剩一個動詞或空白，保底
+        if not title:
+            title = "未命名活動"
+
+
+        # ---------- 活動名稱語意修正（關鍵） ----------
+
+        # 常見「調度語意」開頭（不是活動本身）
+        SCHEDULING_PREFIXES = [
+            "找空閒時間",
+            "找時間",
+            "幫我找",
+            "安排",
+            "幫我安排",
+            "找",
+        ]
+
+        for prefix in SCHEDULING_PREFIXES:
+            if title.startswith(prefix):
+                title = title.replace(prefix, "").strip()
 
         # 日期
         date_str = ev.get("date")
@@ -233,17 +326,26 @@ def _post_process_and_validate(raw: Dict[str, Any], nl_text: str) -> List[Dict[s
             start_time = fallback_event.get("start_time")
 
         has_explicit_time = start_time not in (None, "", "null")
-        is_flexible = not has_explicit_time
 
-        # ---------- 時長補強 ----------
-        # AI 給的 duration
-        duration = ev.get("duration")
+        # 如果語意上是找空時間，一定是彈性
+        if any(k in nl_text for k in [
+            "找空時間", "找空間時間", "找有空", "幫我找", "空檔", "空時間", "找"
+        ]):
+            is_flexible = True
+            start_time = None
+        else:
+            is_flexible = not has_explicit_time
 
-        # AI 沒抓到 duration，但文字裡有「小時」 → 用 fallback 補
-        if not duration and "小時" in nl_text:
-            duration = fallback_event.get("duration")
+        # ---------- 時長補強（最終正解版） ----------
 
-        # 最後防呆
+        # 一律先用 fallback（語意確定）
+        duration = fallback_event.get("duration")
+
+        # 如果 fallback 沒算到，再退回 AI
+        if not duration:
+            duration = ev.get("duration")
+
+        # 防呆
         duration = int(duration or 60)
 
         # recurrence
@@ -262,3 +364,15 @@ def _post_process_and_validate(raw: Dict[str, Any], nl_text: str) -> List[Dict[s
         })
 
     return results
+
+def chinese_to_int(s: str) -> int:
+    if s == "十":
+        return 10
+    if s.startswith("十"):
+        return 10 + CHINESE_NUM_MAP.get(s[1], 0)
+    if s.endswith("十"):
+        return CHINESE_NUM_MAP.get(s[0], 0) * 10
+    if "十" in s:
+        left, right = s.split("十")
+        return CHINESE_NUM_MAP.get(left, 0) * 10 + CHINESE_NUM_MAP.get(right, 0)
+    return CHINESE_NUM_MAP.get(s, 0)
