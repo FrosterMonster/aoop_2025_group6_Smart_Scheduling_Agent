@@ -91,14 +91,19 @@ def _rule_based_fallback(nl_text: str) -> Dict[str, Any]:
         hour = int(time_match.group(1))
         minute = int(time_match.group(2) or 0)
 
-        # 中文時間語意修正
-        if "下午" in nl_text or "晚上" in nl_text:
-            if hour < 12:
-                hour += 12
+    # 中文時間語意修正（順序很重要）
+    if "中午" in nl_text:
+        # 中午 11 點 → 11:00
+        # 中午 12 點 → 12:00
+        pass
 
-        if "早上" in nl_text or "上午" in nl_text:
-            if hour == 12:
-                hour = 0
+    elif "下午" in nl_text or "晚上" in nl_text:
+        if hour < 12:
+            hour += 12
+
+    elif "早上" in nl_text or "上午" in nl_text:
+        if hour == 12:
+            hour = 0
 
         start_time = f"{hour:02d}:{minute:02d}"
         is_flexible = False
@@ -106,16 +111,12 @@ def _rule_based_fallback(nl_text: str) -> Dict[str, Any]:
     # --- duration 解析（小時） ---
     duration = 60  # 預設 1 小時
 
-    # 中文數字先轉成阿拉伯數字（兩小時 → 2小時）
-    for zh, num in CHINESE_NUM_MAP.items():
-        nl_text = nl_text.replace(f"{zh}小時", f"{num}小時")
-
-    duration_match = re.search(r'(\d+)\s*小時', nl_text)
     if duration_match:
         duration = int(duration_match.group(1)) * 60
     title = re.sub(
         r"(明天|今天|後天|早上|下午|晚上|上午|中午|凌晨|"
         r"\d+點|\d+:\d+|"
+        r"[一二兩三四五六七八九十]+點|"
         r"[一二兩三四五六七八九十\d]+小時)",
         "",
         nl_text
@@ -198,9 +199,9 @@ def _post_process_and_validate(raw: Dict[str, Any], nl_text: str) -> List[Dict[s
 
     today = datetime.now().date()
     results = []
+    fallback_event = _rule_based_fallback(nl_text)["events"][0]
 
     for ev in raw["events"]:
-        fallback_event = _rule_based_fallback(nl_text)["events"][0]
 
         raw_title = ev.get("title") or nl_text
 
@@ -208,6 +209,7 @@ def _post_process_and_validate(raw: Dict[str, Any], nl_text: str) -> List[Dict[s
         title = re.sub(
             r"(明天|今天|後天|本週|下週|早上|下午|晚上|上午|中午|凌晨|"
             r"\d+點|\d+:\d+|"
+            r"[一二兩三四五六七八九十]+點|"
             r"[一二兩三四五六七八九十\d]+小時)",
             "",
             raw_title
