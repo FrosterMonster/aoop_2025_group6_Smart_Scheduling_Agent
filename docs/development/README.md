@@ -18,7 +18,7 @@ This directory contains technical documentation for the AI Schedule Agent develo
    - Shortened prompt from ~200 lines to ~40 lines (80% reduction)
    - Added safety_settings to prevent false positives
    - Added explicit finish_reason error handling
-   - Test script: test_gemini_safety_fix.py
+   - Test script: [tests/test_gemini_safety_fix.py](../../tests/test_gemini_safety_fix.py)
 
 2. **[GEMINI_VERBOSE_OUTPUT_FIX.md](GEMINI_VERBOSE_OUTPUT_FIX.md)** - Dec 28, 2025
    - Fix Gemini generating verbose/broken JSON output
@@ -26,7 +26,7 @@ This directory contains technical documentation for the AI Schedule Agent develo
    - Added strict "ONLY JSON" rules and length limits
    - Added 10 "Do NOT" rules to prevent asking for details
    - Multiple layers of reminders for concise output
-   - Test script: test_gemini_llm.py
+   - Test script: [tests/test_gemini_llm.py](../../tests/test_gemini_llm.py)
 
 3. **[GEMINI_FUNCTION_CALLING_FIX.md](GEMINI_FUNCTION_CALLING_FIX.md)** - Dec 28, 2025
    - Fix Gemini not providing start_time_str and end_time_str

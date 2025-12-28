@@ -213,7 +213,7 @@ brew install python@3.12  # Includes tkinter
 ```bash
 python -m tkinter  # Should show a test window
 # OR
-python test_tkinter.py
+python -m tests.test_tkinter
 ```
 
 **IMPORTANT**: If you get "Can't find a usable init.tcl" or "Tcl isn't installed" error:
