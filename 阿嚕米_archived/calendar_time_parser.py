@@ -61,6 +61,9 @@ def parse_with_ai(nl_text: str) -> Dict[str, Any]:
 
 
 def _rule_based_fallback(nl_text: str) -> Dict[str, Any]:
+
+    text = nl_text  # 用副本，不污染原始輸入
+
     """
     AI quota / error 時的最小可用 parser
     """
@@ -74,12 +77,14 @@ def _rule_based_fallback(nl_text: str) -> Dict[str, Any]:
     start_time = None
     is_flexible = True
 
-    # --- 中文數字時間轉換（一定要在 regex 前） ---
     for zh, num in CHINESE_NUM_MAP.items():
-        nl_text = nl_text.replace(f"{zh}點", f"{num}點")
+        text = text.replace(f"{zh}點", f"{num}點")
 
-    # 只抓「X點 / X:MM」
-    time_match = re.search(r'(\d{1,2})\s*(?:點|:)(\d{1,2})?', nl_text)
+    for zh, num in CHINESE_NUM_MAP.items():
+        text = text.replace(f"{zh}小時", f"{num}小時")
+
+    time_match = re.search(r'(\d{1,2})\s*(?:點|:)(\d{1,2})?', text)
+    duration_match = re.search(r'(\d+)\s*小時', text)
 
     
     if time_match:
@@ -191,6 +196,8 @@ def _post_process_and_validate(raw: Dict[str, Any], nl_text: str) -> List[Dict[s
     results = []
 
     for ev in raw["events"]:
+        fallback_event = _rule_based_fallback(nl_text)["events"][0]
+
         raw_title = ev.get("title") or nl_text
 
         # ① 移除時間相關詞
