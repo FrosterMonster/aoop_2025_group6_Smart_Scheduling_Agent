@@ -2,7 +2,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.tools import Tool
 from langchain.agents import create_react_agent, AgentExecutor
 from langchain_core.prompts import PromptTemplate
-from langchain.memory import ConversationBufferMemory # 新增：記憶模組
+from langchain.memory import ConversationBufferMemory
 from src.tools.base import AgentTool
 import os
 
@@ -59,17 +59,17 @@ class SchedulingAgent:
         if not os.getenv("GOOGLE_API_KEY"):
             raise ValueError("GOOGLE_API_KEY not found. Check your .env file.")
         
-        # 使用你測試成功且穩定的模型
-        self._llm = ChatGoogleGenerativeAI(model="gemini-flash-latest", temperature=0)
+        # ▼▼▼ 修改這裡：改用 gemini-exp-1206 ▼▼▼
+        # 它的額度通常比較寬鬆，而且更聰明
+        self._llm = ChatGoogleGenerativeAI(model="gemini-exp-1206", temperature=0)
 
-        # 1. 設定 Prompt，加入 input_variables 包含 chat_history
+        # 1. 設定 Prompt
         prompt = PromptTemplate(
             template=CUSTOM_SYSTEM_PROMPT,
             input_variables=["tools", "tool_names", "input", "agent_scratchpad", "chat_history"]
         )
         
         # 2. 初始化記憶體
-        # memory_key="chat_history" 必須跟 Prompt 裡的變數名稱對應
         self.memory = ConversationBufferMemory(
             memory_key="chat_history",
             return_messages=True
@@ -84,12 +84,11 @@ class SchedulingAgent:
             verbose=True,
             handle_parsing_errors=True,
             max_iterations=10,
-            memory=self.memory # 關鍵：讓它擁有記憶
+            memory=self.memory # 讓它擁有記憶
         )
 
     def run(self, user_query: str):
         try:
-            # 這裡不需要再手動傳 chat_history，Executor 會自動處理
             result = self._executor.invoke({"input": user_query})
             return result["output"]
         except Exception as e:
