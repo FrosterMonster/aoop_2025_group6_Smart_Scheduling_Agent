@@ -19,7 +19,7 @@ from ai_schedule_agent.integrations.google_calendar import CalendarIntegration
 from ai_schedule_agent.integrations.notifications import NotificationManager
 from ai_schedule_agent.utils.logging import logger
 from ai_schedule_agent.utils.i18n import get_i18n
-from ai_schedule_agent.ui.modern_theme import ModernTheme
+from ai_schedule_agent.ui.enterprise_theme import EnterpriseTheme
 
 
 class ModernSchedulerUI:
@@ -66,11 +66,11 @@ class ModernSchedulerUI:
         self.start_background_tasks()
 
     def setup_styles(self):
-        """Setup modern UI styles"""
+        """Setup Enterprise UI styles"""
         style = ttk.Style()
-        ModernTheme.configure_styles(style, self.root)
-        self.root.configure(bg=ModernTheme.COLORS['bg_primary'])
-        logger.info("Modern healthcare UI theme configured")
+        EnterpriseTheme.configure_styles(style, self.root)
+        self.root.configure(bg=EnterpriseTheme.BACKGROUND['app'])
+        logger.info("Enterprise UI theme configured")
 
     def load_or_create_profile(self) -> UserProfile:
         """Load or create user profile"""
@@ -185,14 +185,14 @@ class ModernSchedulerUI:
         logger.info("Setting up modern AI Schedule Agent UI...")
 
         # Main container with gradient background
-        main_container = tk.Frame(self.root, bg=ModernTheme.COLORS['bg_primary'])
+        main_container = tk.Frame(self.root, bg=EnterpriseTheme.BACKGROUND['app'])
         main_container.pack(fill='both', expand=True)
 
         # === LEFT SIDEBAR ===
         self.create_sidebar(main_container)
 
         # === RIGHT CONTENT AREA ===
-        right_container = tk.Frame(main_container, bg=ModernTheme.COLORS['bg_primary'])
+        right_container = tk.Frame(main_container, bg=EnterpriseTheme.BACKGROUND['app'])
         right_container.pack(side='left', fill='both', expand=True)
 
         # Main content area with all tabs
@@ -205,36 +205,36 @@ class ModernSchedulerUI:
 
     def create_sidebar(self, parent):
         """Create left sidebar with navigation to all original features"""
-        sidebar = tk.Frame(parent, bg=ModernTheme.COLORS['bg_sidebar'], width=280)
+        sidebar = tk.Frame(parent, bg=EnterpriseTheme.BACKGROUND['card'], width=280)
         sidebar.pack(side='left', fill='y', padx=0, pady=0)
         sidebar.pack_propagate(False)
 
         # === TOP SECTION: Logo and App Name ===
-        top_section = tk.Frame(sidebar, bg=ModernTheme.COLORS['bg_sidebar'])
+        top_section = tk.Frame(sidebar, bg=EnterpriseTheme.BACKGROUND['card'])
         top_section.pack(fill='x', padx=20, pady=20)
 
-        # App logo/icon
+        # BizLink-style logo - simpler, smaller
         logo_label = tk.Label(
             top_section,
-            text="🤖",
-            font=('Segoe UI Emoji', 32),
-            bg=ModernTheme.COLORS['bg_sidebar'],
-            fg=ModernTheme.COLORS['primary']
+            text="📅",  # Calendar emoji, cleaner than robot
+            font=('Segoe UI Emoji', 28),
+            bg=EnterpriseTheme.BACKGROUND['card'],
+            fg=EnterpriseTheme.TEXT['primary']
         )
-        logo_label.pack(pady=(0, 10))
+        logo_label.pack(pady=(0, 8))
 
-        # App name
+        # BizLink-style app name: clean, bold
         app_name = tk.Label(
             top_section,
-            text="AI Schedule Agent",
-            font=('Microsoft YaHei', 14, 'bold'),
-            bg=ModernTheme.COLORS['bg_sidebar'],
-            fg=ModernTheme.COLORS['text_primary']
+            text="AI Schedule",
+            font=('Segoe UI', 16, 'bold'),  # BizLink logo font
+            bg=EnterpriseTheme.BACKGROUND['card'],
+            fg=EnterpriseTheme.TEXT['primary']
         )
         app_name.pack()
 
         # === NAVIGATION SECTION ===
-        nav_section = tk.Frame(sidebar, bg=ModernTheme.COLORS['bg_sidebar'])
+        nav_section = tk.Frame(sidebar, bg=EnterpriseTheme.BACKGROUND['card'])
         nav_section.pack(fill='x', padx=20, pady=(30, 10))
 
         # Navigation buttons for all original tabs
@@ -249,12 +249,12 @@ class ModernSchedulerUI:
         for nav_id, label, tab_index in nav_items:
             self.create_nav_button(nav_section, nav_id, label, tab_index)
 
-        # === DIVIDER ===
-        divider = tk.Frame(sidebar, bg=ModernTheme.COLORS['divider'], height=1)
+        # === DIVIDER === (BizLink has subtle or no divider)
+        divider = tk.Frame(sidebar, bg=EnterpriseTheme.BORDER['default'], height=1)
         divider.pack(fill='x', padx=20, pady=20)
 
         # === FILTER SECTION ===
-        filter_section = tk.Frame(sidebar, bg=ModernTheme.COLORS['bg_sidebar'])
+        filter_section = tk.Frame(sidebar, bg=EnterpriseTheme.BACKGROUND['card'])
         filter_section.pack(fill='both', expand=True, padx=20, pady=10)
 
         # Filter title
@@ -262,20 +262,20 @@ class ModernSchedulerUI:
             filter_section,
             text="Event Filters",
             font=('Microsoft YaHei', 11, 'bold'),
-            bg=ModernTheme.COLORS['bg_sidebar'],
-            fg=ModernTheme.COLORS['text_primary'],
+            bg=EnterpriseTheme.BACKGROUND['card'],
+            fg=EnterpriseTheme.TEXT['primary'],
             anchor='w'
         )
         filter_title.pack(fill='x', pady=(0, 15))
 
         # Event type filters with color dots
         event_types = [
-            ("meeting", "Meetings", ModernTheme.CONSULTATION_COLORS['meeting']),
-            ("focus", "Focus Work", ModernTheme.CONSULTATION_COLORS['focus']),
-            ("break", "Breaks", ModernTheme.CONSULTATION_COLORS['break']),
-            ("personal", "Personal", ModernTheme.CONSULTATION_COLORS['personal']),
-            ("task", "Tasks", ModernTheme.CONSULTATION_COLORS['task']),
-            ("other", "Other", ModernTheme.CONSULTATION_COLORS['other']),
+            ("meeting", "Meetings", EnterpriseTheme.EVENT_COLORS['meeting']),
+            ("focus", "Focus Work", EnterpriseTheme.EVENT_COLORS['focus']),
+            ("break", "Breaks", EnterpriseTheme.EVENT_COLORS['break']),
+            ("personal", "Personal", EnterpriseTheme.EVENT_COLORS['personal']),
+            ("task", "Tasks", EnterpriseTheme.EVENT_COLORS['task']),
+            ("other", "Other", EnterpriseTheme.EVENT_COLORS['other']),
         ]
 
         self.filter_buttons = {}
@@ -283,20 +283,20 @@ class ModernSchedulerUI:
             self.create_filter_button(filter_section, event_type, label, color)
 
     def create_nav_button(self, parent, nav_id, label, tab_index):
-        """Create a navigation button for switching tabs"""
-        btn_frame = tk.Frame(parent, bg=ModernTheme.COLORS['bg_sidebar'])
-        btn_frame.pack(fill='x', pady=4)
+        """Create BizLink-style navigation button - minimal, clean"""
+        btn_frame = tk.Frame(parent, bg=EnterpriseTheme.BACKGROUND['card'])
+        btn_frame.pack(fill='x', pady=2)
 
         nav_btn = tk.Label(
             btn_frame,
             text=label,
-            font=('Microsoft YaHei', 11),
-            bg=ModernTheme.COLORS['bg_sidebar'],
-            fg=ModernTheme.COLORS['text_secondary'],
+            font=('Segoe UI', 13),  # BizLink uses cleaner font
+            bg=EnterpriseTheme.BACKGROUND['card'],
+            fg=EnterpriseTheme.TEXT['secondary'],  # Lighter gray for unselected
             cursor='hand2',
             anchor='w',
-            padx=15,
-            pady=10
+            padx=12,
+            pady=8
         )
         nav_btn.pack(fill='x')
 
@@ -304,19 +304,21 @@ class ModernSchedulerUI:
             # Switch to the selected tab
             if hasattr(self, 'content_notebook'):
                 self.content_notebook.select(tab_index)
-            # Update button styles
+            # Update button styles - BizLink style (NO background change!)
             for btn_id, btn in self.nav_buttons.items():
                 if btn_id == nav_id:
+                    # Selected: darker text, semi-bold
                     btn.config(
-                        bg=ModernTheme.COLORS['primary'],
-                        fg='white',
-                        font=('Microsoft YaHei', 11, 'bold')
+                        bg=EnterpriseTheme.BACKGROUND['card'],  # NO colored bg!
+                        fg=EnterpriseTheme.TEXT['primary'],   # Darker text
+                        font=('Segoe UI', 13, 'bold')
                     )
                 else:
+                    # Unselected: lighter text, regular weight
                     btn.config(
-                        bg=ModernTheme.COLORS['bg_sidebar'],
-                        fg=ModernTheme.COLORS['text_secondary'],
-                        font=('Microsoft YaHei', 11)
+                        bg=EnterpriseTheme.BACKGROUND['card'],
+                        fg=EnterpriseTheme.TEXT['secondary'],
+                        font=('Segoe UI', 13)
                     )
 
         nav_btn.bind('<Button-1>', on_click)
@@ -326,27 +328,26 @@ class ModernSchedulerUI:
         # Set first as default
         if tab_index == 0:
             nav_btn.config(
-                bg=ModernTheme.COLORS['primary'],
-                fg='white',
-                font=('Microsoft YaHei', 11, 'bold')
+                bg=EnterpriseTheme.BACKGROUND['card'],
+                fg=EnterpriseTheme.TEXT['primary'],
+                font=('Segoe UI', 13, 'bold')
             )
 
     def add_hover_effect_nav(self, widget, nav_id):
-        """Add hover effect to navigation button"""
+        """Add BizLink-style hover - subtle background only"""
         def on_enter(e):
-            if widget.cget('bg') != ModernTheme.COLORS['primary']:
-                widget.config(bg=ModernTheme.COLORS['hover'])
+            # Very subtle hover - just slightly darker
+            widget.config(bg='#F5F5F5')
 
         def on_leave(e):
-            if widget.cget('bg') != ModernTheme.COLORS['primary']:
-                widget.config(bg=ModernTheme.COLORS['bg_sidebar'])
+            widget.config(bg=EnterpriseTheme.BACKGROUND['card'])
 
         widget.bind('<Enter>', on_enter)
         widget.bind('<Leave>', on_leave)
 
     def create_filter_button(self, parent, event_type, label, color):
         """Create a filter button with color dot"""
-        filter_frame = tk.Frame(parent, bg=ModernTheme.COLORS['bg_sidebar'])
+        filter_frame = tk.Frame(parent, bg=EnterpriseTheme.BACKGROUND['card'])
         filter_frame.pack(fill='x', pady=6)
 
         # Color dot
@@ -354,7 +355,7 @@ class ModernSchedulerUI:
             filter_frame,
             width=12,
             height=12,
-            bg=ModernTheme.COLORS['bg_sidebar'],
+            bg=EnterpriseTheme.BACKGROUND['card'],
             highlightthickness=0
         )
         dot_canvas.pack(side='left', padx=(0, 10))
@@ -365,8 +366,8 @@ class ModernSchedulerUI:
             filter_frame,
             text=label,
             font=('Microsoft YaHei', 10),
-            bg=ModernTheme.COLORS['bg_sidebar'],
-            fg=ModernTheme.COLORS['text_secondary'],
+            bg=EnterpriseTheme.BACKGROUND['card'],
+            fg=EnterpriseTheme.TEXT['tertiary'],
             cursor='hand2',
             anchor='w'
         )
@@ -376,10 +377,10 @@ class ModernSchedulerUI:
         def toggle_filter(e=None):
             if event_type in self.selected_filters:
                 self.selected_filters.remove(event_type)
-                label_btn.config(fg=ModernTheme.COLORS['text_secondary'])
+                label_btn.config(fg=EnterpriseTheme.TEXT['tertiary'])
             else:
                 self.selected_filters.add(event_type)
-                label_btn.config(fg=ModernTheme.COLORS['text_primary'], font=('Microsoft YaHei', 10, 'bold'))
+                label_btn.config(fg=EnterpriseTheme.TEXT['primary'], font=('Microsoft YaHei', 10, 'bold'))
             self.refresh_calendar()
 
         label_btn.bind('<Button-1>', toggle_filter)
@@ -387,15 +388,60 @@ class ModernSchedulerUI:
 
     def create_main_content(self, parent):
         """Create main content area with all original tabs integrated"""
-        # Content container
-        content_container = tk.Frame(parent, bg=ModernTheme.COLORS['bg_primary'])
+        # Content container with a scrollable area to avoid bottom widgets being hidden
+        content_container = tk.Frame(parent, bg=EnterpriseTheme.BACKGROUND['app'])
         content_container.pack(fill='both', expand=True, padx=10, pady=10)
+
+        # Create a canvas + scrollbar so the main content can scroll vertically
+        canvas = tk.Canvas(content_container, bg=EnterpriseTheme.BACKGROUND['app'], highlightthickness=0)
+        v_scroll = tk.Scrollbar(content_container, orient='vertical', command=canvas.yview)
+        canvas.configure(yscrollcommand=v_scroll.set)
+
+        # Place canvas and scrollbar
+        canvas.pack(side='left', fill='both', expand=True)
+        v_scroll.pack(side='right', fill='y')
+
+        # Inner frame inside canvas which will actually hold the notebook
+        inner_frame = tk.Frame(canvas, bg=EnterpriseTheme.BACKGROUND['app'])
+
+        # Make the inner_frame a window inside the canvas and keep a reference
+        window_id = canvas.create_window((0, 0), window=inner_frame, anchor='nw')
+
+        # Ensure the canvas scrollregion updates when the inner frame size changes
+        def _on_frame_configure(event):
+            canvas.configure(scrollregion=canvas.bbox('all'))
+
+        inner_frame.bind('<Configure>', _on_frame_configure)
+
+        # When canvas is resized, ensure inner_frame width matches canvas width
+        def _on_canvas_configure(event):
+            try:
+                canvas.itemconfig(window_id, width=event.width)
+            except Exception:
+                pass
+
+        canvas.bind('<Configure>', _on_canvas_configure)
+
+        # Bind mouse wheel scrolling for convenience (only when pointer is over canvas)
+        def _on_mousewheel(event):
+            if event.delta:
+                # Windows / macOS: event.delta is multiples of 120
+                delta = -1 * (event.delta // 120)
+            else:
+                # X11: use Button-4 / Button-5
+                delta = 1 if event.num == 5 else -1
+            canvas.yview_scroll(delta, 'units')
+
+        # Bind to canvas and inner_frame rather than globally
+        canvas.bind_all('<MouseWheel>', _on_mousewheel)
+        canvas.bind_all('<Button-4>', _on_mousewheel)
+        canvas.bind_all('<Button-5>', _on_mousewheel)
 
         # Create notebook (tabbed interface) but hide the tabs - navigation is via sidebar
         style = ttk.Style()
         style.layout('Hidden.TNotebook.Tab', [])  # Hide tab headers
 
-        self.content_notebook = ttk.Notebook(content_container, style='Hidden.TNotebook')
+        self.content_notebook = ttk.Notebook(inner_frame, style='Hidden.TNotebook')
         self.content_notebook.pack(fill='both', expand=True)
 
         # === Tab 1: Quick Schedule ===
@@ -511,8 +557,8 @@ class ModernSchedulerUI:
             parent,
             text=self.i18n.t('ready'),
             font=('Microsoft YaHei', 9),
-            bg=ModernTheme.COLORS['bg_secondary'],
-            fg=ModernTheme.COLORS['text_secondary'],
+            bg=EnterpriseTheme.BACKGROUND['hover'],
+            fg=EnterpriseTheme.TEXT['tertiary'],
             anchor='w',
             padx=20,
             pady=8

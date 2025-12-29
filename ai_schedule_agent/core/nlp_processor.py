@@ -781,13 +781,17 @@ REASON: Free slot in afternoon, no conflicts, good spacing"""
         return result
 
     def _extract_with_chinese_patterns(self, text: str) -> Dict:
-        """Enhanced Chinese pattern extraction from 阿嚕米
+        """Enhanced Chinese pattern extraction from 阿嚕米 Mock mode
+
+        This method uses the exact pattern matching logic from 阿嚕米_archived/agent_main.py
+        mock_handle() function to extract event details from Chinese text.
 
         Extracts event details using regex patterns optimized for Chinese text:
         - Brackets: 「」 "" 『』
         - Time ranges: 到 (to)
         - Relative dates: 今天/明天/後天
         - Duration: X小時
+        - Action keywords: 安排/排/訂/預定
 
         Args:
             text: Natural language text (Chinese or mixed)
@@ -797,29 +801,96 @@ REASON: Free slot in afternoon, no conflicts, good spacing"""
         """
         result = {}
 
-        # Extract title from Chinese brackets or quotes
+        # === 阿嚕米 Mock Mode: Title Extraction ===
+        # Extract title from Chinese brackets or quotes (阿嚕米's pattern)
         summary = None
-        # Pattern 1: Chinese/English quotes: 「」 "" 『』
-        m = re.search(r'["\u201c\u201d\u300c\u300d\u300e\u300f](.+?)["\u201c\u201d\u300c\u300d\u300e\u300f]', text)
+        # Pattern 1: Chinese/English quotes: 「」 "" 『』《》 (exact match from 阿嚕米)
+        # Including book title marks 《》
+        m = re.search(r'["\u201c\u201d\u300c\u300d\u300e\u300f\u300a\u300b](.+?)["\u201c\u201d\u300c\u300d\u300e\u300f\u300a\u300b]', text)
         if m:
             summary = m.group(1)
+            logger.debug(f"阿嚕米 pattern (quoted): extracted title '{summary}'")
         else:
-            # Pattern 2: Extract event name after time/duration info
-            # Examples: "明天下午排3小時開會" -> "開會", "排1小時討論" -> "討論"
-            # Look for text after duration (X小時/X分鐘)
-            duration_pattern = re.search(r'(\d+)\s*(?:小時|分鐘)(.+?)(?:，|,|。|$)', text)
-            if duration_pattern:
-                summary = duration_pattern.group(2).strip()
+
+            # Pattern 2: Action keywords at start + content (enhanced pattern)
+            # Examples: "安排明天下午3點面試" -> need to extract just "面試"
+            # Match action keyword at the start, then extract just the event name
+            m2 = re.search(r'^(?:安排|排|訂|預定)(?:一個|個)?(?:「([^」]+)」)', text)
+            if m2:
+                summary = m2.group(1)
+                logger.debug(f"阿嚕米 pattern (action + quoted): extracted title '{summary}'")
             else:
-                # Pattern 3: Look for text after action keywords (安排/排)
-                # But exclude duration numbers
-                action_pattern = re.search(r'[安排排訂預定](?:一個|個)?(?:「([^」]+)」|([^0-9，。]+?)(?:，|,|。|$))', text)
-                if action_pattern:
-                    summary = action_pattern.group(1) or action_pattern.group(2)
+                # Pattern 3: Extract event name after duration info (ASA enhancement)
+                # Examples: "明天下午排3小時開會" -> "開會", "排1小時討論" -> "討論"
+                duration_pattern = re.search(r'(\d+)\s*(?:小時|分鐘)(.+?)(?:，|,|。|$)', text)
+                if duration_pattern:
+                    summary = duration_pattern.group(2).strip()
+                    logger.debug(f"Enhanced pattern (post-duration): extracted title '{summary}'")
+                else:
+                    # Pattern 4: Extract after time + action keyword (排/安排/訂/預定)
+                    # Examples: "明天下午3點排開會" -> "開會"
+                    time_action_pattern = re.search(r'(?:今天|明天|後天|本週|下週).*?\d+\s*點\s*(?:排|安排|訂|預定)(.+?)(?:，|,|。|$)', text)
+                    if time_action_pattern:
+                        summary = time_action_pattern.group(1).strip()
+                        logger.debug(f"Enhanced pattern (after time+action): extracted title '{summary}'")
+                    else:
+                        # Pattern 5: Extract after time range (X點到Y點) - NEW PATTERN
+                        # Examples: "明天下午2點到4點開會" -> "開會"
+                        time_range_pattern = re.search(r'\d+\s*點\s*到\s*\d+\s*點\s*(.+?)(?:，|,|。|$)', text)
+                        if time_range_pattern:
+                            summary = time_range_pattern.group(1).strip()
+                            logger.debug(f"Enhanced pattern (after time range): extracted title '{summary}'")
+                        else:
+                            # Pattern 6: Extract after single time point - NEW PATTERN
+                            # Examples: "明天下午2點討論專案" -> "討論專案", "今天晚上8點面試" -> "面試"
+                            single_time_pattern = re.search(r'\d+\s*點\s*(.+?)(?:，|,|。|$)', text)
+                            if single_time_pattern:
+                                summary = single_time_pattern.group(1).strip()
+                                logger.debug(f"Enhanced pattern (after single time): extracted title '{summary}'")
+                            else:
+                                # Pattern 7: Extract after time period (上午/下午/晚上) without specific time - NEW PATTERN
+                                # Examples: "明天下午開會" -> "開會", "今天晚上討論" -> "討論"
+                                period_pattern = re.search(r'(?:今天|明天|後天|本週|下週)(?:上午|下午|早上|中午|晚上|傍晚|清晨)\s*(.+?)(?:，|,|。|$)', text)
+                                if period_pattern:
+                                    summary = period_pattern.group(1).strip()
+                                    logger.debug(f"Enhanced pattern (after time period): extracted title '{summary}'")
+                                else:
+                                    # Pattern 8: Very simple - just date + event (no time) - NEW PATTERN
+                                    # Examples: "明天開會" -> "開會"
+                                    simple_pattern = re.search(r'^(?:今天|明天|後天|本週|下週)\s*(.+?)(?:，|,|。|$)', text)
+                                    if simple_pattern:
+                                        summary = simple_pattern.group(1).strip()
+                                        logger.debug(f"Enhanced pattern (simple date+event): extracted title '{summary}'")
+                                    else:
+                                        # Pattern 9: Action keyword at start + time + event - NEW PATTERN
+                                        # Examples: "安排明天下午3點面試" -> "面試"
+                                        action_time_pattern = re.search(r'^(?:安排|排|訂|預定).*?(?:\d+點|上午|下午|早上|中午|晚上)\s*(.+?)(?:，|,|。|$)', text)
+                                        if action_time_pattern:
+                                            summary = action_time_pattern.group(1).strip()
+                                            logger.debug(f"Enhanced pattern (action+time+event): extracted title '{summary}'")
+
 
         if summary:
+            # Clean up extracted title - remove action keywords and duration prefixes
+            summary = summary.strip()
+
+            # Remove action keywords at the start
+            summary = re.sub(r'^(?:排|安排|訂|預定)\s*', '', summary)
+
+            # Remove duration prefixes (e.g., "30分鐘站立會議" -> "站立會議")
+            summary = re.sub(r'^\d+\s*(?:小時|分鐘)\s*', '', summary)
+            summary = re.sub(r'^\d+\s*小時\s*\d+\s*分鐘\s*', '', summary)  # 2小時30分鐘
+            summary = re.sub(r'^半\s*小時\s*', '', summary)  # 半小時
+
+            # Remove fuzzy time expressions (大概/約/前後/左右)
+            summary = re.sub(r'(?:大概|約|前後|左右)\s*', '', summary)
+
+            # Remove participant references (跟...和...) - be more conservative
+            # Only remove if it looks like names (Latin letters or short Chinese names)
+            summary = re.sub(r'跟[A-Z][a-z]+(?:和|與)[A-Z][a-z]+\s*', '', summary)  # English names
+
             result['title'] = summary.strip()
-            logger.debug(f"Chinese pattern extracted title: '{result['title']}'")
+            logger.info(f"阿嚕米 Mock mode extracted title: '{result['title']}'")
 
         # Extract duration: X小時 or X分鐘
         duration_match = re.search(r'(\d+)\s*小時', text)
@@ -834,80 +905,135 @@ REASON: Free slot in afternoon, no conflicts, good spacing"""
                 result['duration'] = int(minute_match.group(1))
                 logger.debug(f"Chinese pattern extracted duration: {result['duration']} minutes")
 
-        # Extract time range using '到' (to) pattern
+        # === 阿嚕米 Mock Mode: Time Range Extraction ===
+        # Extract time range using '到' (to) pattern (exact logic from 阿嚕米)
         if '到' in text:
             parts = text.split('到')
-            # Extract start time (after '時間是' if present)
+            # Extract start time (after '時間是' if present) - 阿嚕米's logic
             start_str = parts[0].split('時間是')[-1].strip() if '時間是' in parts[0] else parts[0].strip()
-            # Extract end time (before punctuation)
+            # Extract end time (before punctuation) - 阿嚕米's logic
             end_str = parts[1].split('。')[0].split('，')[0].strip()
 
-            # Use ASA's superior time parser
+            logger.debug(f"阿嚕米 time range: start_str='{start_str}', end_str='{end_str}'")
+
+            # Use parse_nl_time (same as 阿嚕米's parse_nl_time from calendar_time_parser)
             start_dt = parse_nl_time(start_str)
             end_dt = parse_nl_time(end_str)
 
+            # If end_dt parsing failed and it looks like just an hour (e.g., "4點" or "9點")
+            # try to construct it from start_dt's date
+            if start_dt and not end_dt and re.match(r'^\d{1,2}\s*點', end_str):
+                hour_match = re.match(r'^(\d{1,2})\s*點', end_str)
+                if hour_match:
+                    from datetime import datetime, timedelta
+                    hour = int(hour_match.group(1))
+
+                    # Smart AM/PM detection based on start time and context
+                    start_hour = start_dt.hour
+
+                    # If hour is 1-12 and could be either AM or PM
+                    if 1 <= hour <= 12:
+                        # Check context for 下午/晚上 (afternoon/evening) in the full text
+                        if '下午' in text or '晚上' in text:
+                            # Afternoon/evening context - use PM (12-hour -> 24-hour)
+                            if hour != 12:
+                                hour = hour + 12 if hour < 12 else hour
+                        # If start is in afternoon (12-18) and end hour is small (1-11)
+                        elif 12 <= start_hour < 18 and hour < 12:
+                            hour += 12  # Convert to PM
+                        # If start is in evening (18-23) and end hour is small (1-11)
+                        elif 18 <= start_hour and hour < 12:
+                            hour += 12  # Convert to PM
+
+                    # Construct end time on same day as start time
+                    end_dt = start_dt.replace(hour=hour, minute=0, second=0)
+
+                    # If end is still before or equal to start, something went wrong
+                    if end_dt <= start_dt:
+                        # Only add a day if it makes sense (e.g., overnight event)
+                        if hour < 6:  # Late night/early morning hours
+                            end_dt = end_dt + timedelta(days=1)
+                        else:
+                            # Otherwise, keep it on same day (user likely meant same day)
+                            logger.warning(f"End time {hour}:00 is before start time {start_hour}:00 on same day")
+
+                    logger.info(f"阿嚕米 constructed end time from hour '{end_str}': {end_dt} (hour={hour})")
+
             if start_dt:
                 result['datetime'] = start_dt
-                logger.debug(f"Chinese pattern extracted start time: {start_dt}")
+                logger.info(f"阿嚕米 Mock mode extracted start time: {start_dt}")
             if end_dt:
                 result['end_datetime'] = end_dt
-                logger.debug(f"Chinese pattern extracted end time: {end_dt}")
+                logger.info(f"阿嚕米 Mock mode extracted end time: {end_dt}")
                 if start_dt:
                     # Calculate duration in minutes
                     result['duration'] = int((end_dt - start_dt).total_seconds() / 60)
-                    logger.debug(f"Chinese pattern calculated duration: {result['duration']} minutes")
+                    logger.info(f"阿嚕米 Mock mode calculated duration: {result['duration']} minutes")
 
-        # Extract single time with relative date pattern: 明天下午/今天晚上 etc.
+        # === 阿嚕米 Mock Mode: Single Time Extraction ===
+        # Extract single time with relative date pattern (阿嚕米's exact pattern)
         if not result.get('datetime'):
-            # More flexible pattern for Chinese relative dates
-            patterns = [
-                r'(明天|今天|後天)(下午|上午|早上|中午|晚上|傍晚)?',  # Tomorrow afternoon, etc.
-                r'(今天|明天|後天).*?(\d{1,2})\s*點',  # Today...2pm
-                r'(本週|下週)(一|二|三|四|五|六|日)',  # This week Monday
-            ]
 
-            for pattern in patterns:
-                m3 = re.search(pattern, text)
-                if m3:
-                    time_str = m3.group(0)
+            # Exact pattern from 阿嚕米: r'(今天|明天|後天|本週\S*|下週\S*).*?(\d{1,2})\s*點'
+            m3 = re.search(r'(今天|明天|後天|本週\S*|下週\S*).*?(\d{1,2})\s*點', text)
+            if m3:
+                time_str = m3.group(0)
+                logger.debug(f"阿嚕米 single time pattern matched: '{time_str}'")
 
-                    # If specific time (X點) is mentioned, use it
-                    if '點' in time_str:
-                        dt = parse_nl_time(time_str)
-                        if dt:
-                            result['datetime'] = dt
-                            logger.debug(f"Chinese pattern extracted specific datetime: {dt}")
-                            break
-                    else:
-                        # NO specific time - store time preference for scheduling engine
-                        # Don't set datetime - let scheduling engine find optimal slot
-                        time_period = None
-                        if '下午' in time_str:
-                            time_period = 'afternoon'
-                            result['time_preference'] = {'period': 'afternoon', 'start_hour': 13, 'end_hour': 18}
-                        elif '上午' in time_str or '早上' in time_str:
-                            time_period = 'morning'
-                            result['time_preference'] = {'period': 'morning', 'start_hour': 9, 'end_hour': 12}
-                        elif '晚上' in time_str or '傍晚' in time_str:
-                            time_period = 'evening'
-                            result['time_preference'] = {'period': 'evening', 'start_hour': 18, 'end_hour': 21}
-                        elif '中午' in time_str:
-                            time_period = 'noon'
-                            result['time_preference'] = {'period': 'noon', 'start_hour': 11, 'end_hour': 14}
+                # Parse using parse_nl_time (same as 阿嚕米)
+                dt = parse_nl_time(time_str)
+                if dt:
+                    result['datetime'] = dt
+                    logger.info(f"阿嚕米 Mock mode extracted datetime: {dt}")
+                    # If we have duration and datetime, calculate end_datetime
+                    if result.get('duration') and not result.get('end_datetime'):
+                        from datetime import timedelta
+                        result['end_datetime'] = dt + timedelta(minutes=result['duration'])
+                        logger.info(f"阿嚕米 calculated end_datetime: {result['end_datetime']}")
+            else:
+                # Fallback: Check for time period without specific time (ASA enhancement)
+                # This is NOT in 阿嚕米's Mock mode, but useful for "明天下午" without specific hour
+                period_pattern = re.search(r'(明天|今天|後天)(下午|上午|早上|中午|晚上|傍晚)', text)
+                if period_pattern:
+                    time_str = period_pattern.group(0)
+                    # NO specific time - store time preference for scheduling engine
+                    # Don't set datetime - let scheduling engine find optimal slot
+                    time_period = None
+                    if '下午' in time_str:
+                        time_period = 'afternoon'
+                        result['time_preference'] = {'period': 'afternoon', 'start_hour': 13, 'end_hour': 18}
+                    elif '上午' in time_str or '早上' in time_str:
+                        time_period = 'morning'
+                        result['time_preference'] = {'period': 'morning', 'start_hour': 9, 'end_hour': 12}
+                    elif '晚上' in time_str or '傍晚' in time_str:
+                        time_period = 'evening'
+                        result['time_preference'] = {'period': 'evening', 'start_hour': 18, 'end_hour': 21}
+                    elif '中午' in time_str:
+                        time_period = 'noon'
+                        result['time_preference'] = {'period': 'noon', 'start_hour': 11, 'end_hour': 14}
 
-                        # Store target date without time (scheduling engine will find slot)
-                        date_only_str = m3.group(1)  # 明天/今天/後天
-                        dt = parse_nl_time(date_only_str)
-                        if dt:
-                            # Store as target_date instead of datetime
-                            result['target_date'] = dt.date()
-                            logger.info(f"Chinese pattern: target_date={dt.date()}, time_preference={time_period}, "
-                                       f"let scheduling engine find optimal slot")
-                            break
+                    # Store target date without time (scheduling engine will find slot)
+                    date_only_str = period_pattern.group(1)  # 明天/今天/後天
+                    dt = parse_nl_time(date_only_str)
+                    if dt:
+                        # Store as target_date instead of datetime
+                        result['target_date'] = dt.date()
+                        logger.info(f"Chinese pattern: target_date={dt.date()}, time_preference={time_period}, "
+                                   f"let scheduling engine find optimal slot")
+
+        # === 阿嚕米 Mock Mode: Default Duration Fallback ===
+        # If we have datetime but no end_datetime and no duration, default to 1 hour (阿嚕米's logic)
+        if result.get('datetime') and not result.get('end_datetime') and not result.get('duration'):
+            from datetime import timedelta
+            result['duration'] = 60  # 1 hour default (same as 阿嚕米)
+            result['end_datetime'] = result['datetime'] + timedelta(hours=1)
+            logger.info(f"阿嚕米 Mock mode: applied default 1-hour duration")
 
         # Log extracted fields for debugging
         extracted_fields = {k: v for k, v in result.items() if v is not None}
-        logger.info(f"Chinese pattern extraction complete: {extracted_fields}")
+        logger.info(f"阿嚕米 Mock mode extraction complete: {extracted_fields}")
+
+
         return result
 
     def reset_conversation(self):

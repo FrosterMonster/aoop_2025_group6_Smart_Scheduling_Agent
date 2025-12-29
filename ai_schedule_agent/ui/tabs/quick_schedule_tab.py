@@ -7,6 +7,8 @@ from datetime import timedelta
 
 from ai_schedule_agent.models.event import Event
 from ai_schedule_agent.models.enums import EventType, Priority
+from ai_schedule_agent.ui.enterprise_theme import EnterpriseTheme
+from ai_schedule_agent.ui.components.base import FluentCard
 
 
 class QuickScheduleTab:
@@ -22,95 +24,295 @@ class QuickScheduleTab:
         self.setup_ui()
 
     def setup_ui(self):
-        """Setup quick schedule tab UI"""
+        """Setup quick schedule tab UI with Fluent Design"""
+        # Note: parent is ttk.Frame, can't set bg directly
+        # Background color is handled by theme
 
-        # Natural language input
-        ttk.Label(self.parent, text="Natural Language Input:", font=('Arial', 12)).pack(pady=10)
+        # Main container with padding
+        main_container = tk.Frame(self.parent, bg=EnterpriseTheme.BACKGROUND['app'])
+        main_container.pack(fill='both', expand=True, padx=20, pady=20)
 
-        self.nl_input = ttk.Entry(self.parent, width=80, font=('Arial', 11))
-        self.nl_input.pack(pady=5)
+        # === CARD 1: Natural Language Input ===
+        nl_card = FluentCard(main_container, title="AI Smart Scheduler", padding=20)
+        nl_card.pack(fill='x', pady=(0, 20))
+
+        # BizLink-style subtitle: smaller, lighter gray
+        subtitle = tk.Label(
+            nl_card.body,
+            text="Enter natural language - the system will automatically parse and fill the form",
+            font=('Segoe UI', 12),  # BizLink subtitle font
+            fg=EnterpriseTheme.TEXT['secondary'],  # Lighter gray like BizLink
+            bg=EnterpriseTheme.BACKGROUND['card']
+        )
+        subtitle.pack(pady=(0, 12))
+
+        # NL Input field
+        self.nl_input = ttk.Entry(nl_card.body, width=80, font=('Microsoft YaHei', 11))
+        self.nl_input.pack(pady=5, fill='x')
         self.nl_input.bind('<Return>', lambda e: self.process_nl_input())
+        self.nl_input.insert(0, "Example: Schedule 3-hour meeting tomorrow afternoon")
+        self.nl_input.bind('<FocusIn>', lambda e: self.nl_input.delete(0, tk.END) if self.nl_input.get().startswith("Example") else None)
 
-        nl_button_frame = ttk.Frame(self.parent)
-        nl_button_frame.pack(pady=5)
-        ttk.Button(nl_button_frame, text="Process & Fill Form", command=self.process_nl_input).pack(side='left', padx=5)
+        # Set initial focus
+        try:
+            self.nl_input.focus_set()
+        except Exception:
+            pass
+
+        # Buttons
+        nl_button_frame = tk.Frame(nl_card.body, bg=EnterpriseTheme.BACKGROUND['card'])
+        nl_button_frame.pack(pady=(10, 0))
+        ttk.Button(nl_button_frame, text="🔍 Parse", command=self.process_nl_input, style='Accent.TButton').pack(side='left', padx=5)
         ttk.Button(nl_button_frame, text="Clear", command=self.clear_nl_input).pack(side='left', padx=5)
 
-        # Separator
-        ttk.Separator(self.parent, orient='horizontal').pack(fill='x', pady=20)
+        # === CARD 2: Event Details Form ===
+        form_card = FluentCard(main_container, title="Event Details", padding=20)
+        form_card.pack(fill='both', expand=True, pady=(0, 20))
 
-        # Detailed form
-        ttk.Label(self.parent, text="Detailed Event Form:", font=('Arial', 12)).pack(pady=10)
+        # BizLink-style form subtitle
+        form_subtitle = tk.Label(
+            form_card.body,
+            text="Auto-filled by AI above, or edit manually",
+            font=('Segoe UI', 12),
+            fg=EnterpriseTheme.TEXT['secondary'],
+            bg=EnterpriseTheme.BACKGROUND['card']
+        )
+        form_subtitle.pack(pady=(0, 12))
 
-        form_frame = ttk.Frame(self.parent)
-        form_frame.pack(pady=10)
-
-        # Event details
-        fields = [
-            ("Title:", "title"),
-            ("Description:", "description"),
-            ("Location:", "location"),
-            ("Participants (comma-separated):", "participants"),
-            ("Date (YYYY-MM-DD):", "date"),
-            ("Start Time (HH:MM):", "start_time"),
-            ("Duration (minutes):", "duration"),
-            ("Prep Time (minutes):", "prep_time"),
-            ("Follow-up Time (minutes):", "followup_time")
-        ]
+        # Form fields container
+        form_frame = tk.Frame(form_card.body, bg=EnterpriseTheme.BACKGROUND['card'])
+        form_frame.pack(fill='both', expand=True)
 
         self.form_entries = {}
-        for i, (label, field) in enumerate(fields):
-            ttk.Label(form_frame, text=label).grid(row=i, column=0, sticky='e', padx=5, pady=3)
-            entry = ttk.Entry(form_frame, width=40)
-            entry.grid(row=i, column=1, padx=5, pady=3)
-            self.form_entries[field] = entry
 
-        # Event type dropdown
-        ttk.Label(form_frame, text="Event Type:").grid(row=len(fields), column=0, sticky='e', padx=5, pady=3)
+        # Title (full width)
+        title_input_frame, title_label, title_entry = EnterpriseTheme.create_input_frame(
+            form_frame, "Event Title"
+        )
+        title_input_frame.pack(fill='x', pady=(0, 12))
+        self.form_entries['title'] = title_entry
+
+        # Description (full width)
+        desc_input_frame, desc_label, desc_entry = EnterpriseTheme.create_input_frame(
+            form_frame, "Description"
+        )
+        desc_input_frame.pack(fill='x', pady=(0, 12))
+        self.form_entries['description'] = desc_entry
+
+        # Location (full width)
+        loc_input_frame, loc_label, loc_entry = EnterpriseTheme.create_input_frame(
+            form_frame, "Location"
+        )
+        loc_input_frame.pack(fill='x', pady=(0, 12))
+        self.form_entries['location'] = loc_entry
+
+        # Date and Time (side by side)
+        datetime_row = tk.Frame(form_frame, bg=EnterpriseTheme.BACKGROUND['card'])
+        datetime_row.pack(fill='x', pady=(0, 12))
+
+        # Date (half width)
+        date_col = tk.Frame(datetime_row, bg=EnterpriseTheme.BACKGROUND['card'])
+        date_col.pack(side='left', fill='x', expand=True, padx=(0, 8))
+        date_input_frame, date_label, date_entry = EnterpriseTheme.create_input_frame(
+            date_col, "Date"
+        )
+        date_input_frame.pack(fill='x')
+        self.form_entries['date'] = date_entry
+
+        # Time (half width)
+        time_col = tk.Frame(datetime_row, bg=EnterpriseTheme.BACKGROUND['card'])
+        time_col.pack(side='left', fill='x', expand=True, padx=(8, 0))
+        time_input_frame, time_label, time_entry = EnterpriseTheme.create_input_frame(
+            time_col, "Time"
+        )
+        time_input_frame.pack(fill='x')
+        self.form_entries['start_time'] = time_entry
+
+        # Duration, Prep Time, Follow-up Time (three columns)
+        duration_row = tk.Frame(form_frame, bg=EnterpriseTheme.BACKGROUND['card'])
+        duration_row.pack(fill='x', pady=(0, 12))
+
+        # Duration
+        dur_col = tk.Frame(duration_row, bg=EnterpriseTheme.BACKGROUND['card'])
+        dur_col.pack(side='left', fill='x', expand=True, padx=(0, 8))
+        dur_input_frame, dur_label, dur_entry = EnterpriseTheme.create_input_frame(
+            dur_col, "Duration (min)"
+        )
+        dur_input_frame.pack(fill='x')
+        self.form_entries['duration'] = dur_entry
+
+        # Prep Time
+        prep_col = tk.Frame(duration_row, bg=EnterpriseTheme.BACKGROUND['card'])
+        prep_col.pack(side='left', fill='x', expand=True, padx=(8, 8))
+        prep_input_frame, prep_label, prep_entry = EnterpriseTheme.create_input_frame(
+            prep_col, "Prep (min)"
+        )
+        prep_input_frame.pack(fill='x')
+        self.form_entries['prep_time'] = prep_entry
+
+        # Follow-up Time
+        followup_col = tk.Frame(duration_row, bg=EnterpriseTheme.BACKGROUND['card'])
+        followup_col.pack(side='left', fill='x', expand=True, padx=(8, 0))
+        followup_input_frame, followup_label, followup_entry = EnterpriseTheme.create_input_frame(
+            followup_col, "Follow-up (min)"
+        )
+        followup_input_frame.pack(fill='x')
+        self.form_entries['followup_time'] = followup_entry
+
+        # Event Type and Priority (side by side)
+        type_priority_row = tk.Frame(form_frame, bg=EnterpriseTheme.BACKGROUND['card'])
+        type_priority_row.pack(fill='x', pady=(0, 12))
+
+        # Event Type (half width)
+        type_col = tk.Frame(type_priority_row, bg=EnterpriseTheme.BACKGROUND['card'])
+        type_col.pack(side='left', fill='x', expand=True, padx=(0, 8))
+
+        type_label = tk.Label(
+            type_col,
+            text="Event Type",
+            bg=EnterpriseTheme.BACKGROUND['card'],
+            fg=EnterpriseTheme.TEXT['secondary'],
+            font=(EnterpriseTheme.get_font_family(), EnterpriseTheme.TYPE_SCALE['small'], 'normal'),
+            anchor='w'
+        )
+        type_label.pack(fill='x', pady=(0, 4))
+
         self.event_type_var = tk.StringVar(value=EventType.MEETING.value)
-        event_type_dropdown = ttk.Combobox(form_frame, textvariable=self.event_type_var,
-                                          values=[e.value for e in EventType], state='readonly')
-        event_type_dropdown.grid(row=len(fields), column=1, padx=5, pady=3, sticky='w')
+        event_type_dropdown = ttk.Combobox(
+            type_col,
+            textvariable=self.event_type_var,
+            values=[e.value for e in EventType],
+            state='readonly',
+            style='Enterprise.TCombobox'
+        )
+        event_type_dropdown.pack(fill='x')
 
-        # Priority dropdown
-        ttk.Label(form_frame, text="Priority:").grid(row=len(fields)+1, column=0, sticky='e', padx=5, pady=3)
+        # Priority (half width)
+        priority_col = tk.Frame(type_priority_row, bg=EnterpriseTheme.BACKGROUND['card'])
+        priority_col.pack(side='left', fill='x', expand=True, padx=(8, 0))
+
+        priority_label = tk.Label(
+            priority_col,
+            text="Priority",
+            bg=EnterpriseTheme.BACKGROUND['card'],
+            fg=EnterpriseTheme.TEXT['secondary'],
+            font=(EnterpriseTheme.get_font_family(), EnterpriseTheme.TYPE_SCALE['small'], 'normal'),
+            anchor='w'
+        )
+        priority_label.pack(fill='x', pady=(0, 4))
+
         self.priority_var = tk.StringVar(value="MEDIUM")
-        priority_dropdown = ttk.Combobox(form_frame, textvariable=self.priority_var,
-                                        values=[p.name for p in Priority], state='readonly')
-        priority_dropdown.grid(row=len(fields)+1, column=1, padx=5, pady=3, sticky='w')
+        priority_dropdown = ttk.Combobox(
+            priority_col,
+            textvariable=self.priority_var,
+            values=[p.name for p in Priority],
+            state='readonly',
+            style='Enterprise.TCombobox'
+        )
+        priority_dropdown.pack(fill='x')
+
+        # Participants (full width)
+        participants_input_frame, participants_label, participants_entry = EnterpriseTheme.create_input_frame(
+            form_frame, "Participants (comma-separated)"
+        )
+        participants_input_frame.pack(fill='x', pady=(0, 12))
+        self.form_entries['participants'] = participants_entry
+
+        # Tags (full width)
+        tags_input_frame, tags_label, tags_entry = EnterpriseTheme.create_input_frame(
+            form_frame, "Tags (comma-separated)"
+        )
+        tags_input_frame.pack(fill='x', pady=(0, 12))
+        self.tags_entry = tags_entry
 
         # Flexible checkbox
         self.is_flexible_var = tk.BooleanVar(value=True)
-        ttk.Checkbutton(form_frame, text="Flexible timing",
-                       variable=self.is_flexible_var).grid(row=len(fields)+2, column=1, sticky='w', pady=3)
-
-        # Tags entry
-        ttk.Label(form_frame, text="Tags (comma-separated):").grid(row=len(fields)+3, column=0, sticky='e', padx=5, pady=3)
-        self.tags_entry = ttk.Entry(form_frame, width=40)
-        self.tags_entry.grid(row=len(fields)+3, column=1, padx=5, pady=3)
+        flexible_check = ttk.Checkbutton(
+            form_frame,
+            text="Flexible timing",
+            variable=self.is_flexible_var,
+            style='Enterprise.TCheckbutton'
+        )
+        flexible_check.pack(anchor='w', pady=(0, 16))
 
         # Submit and Clear buttons
-        button_frame = ttk.Frame(form_frame)
-        button_frame.grid(row=len(fields)+4, column=0, columnspan=2, pady=20)
+        button_frame = tk.Frame(form_frame, bg=EnterpriseTheme.BACKGROUND['card'])
+        button_frame.pack(fill='x')
 
-        ttk.Button(button_frame, text="Schedule Event",
-                  command=self.schedule_event_from_form).pack(side='left', padx=5)
-        ttk.Button(button_frame, text="Clear Form",
-                  command=self.clear_form).pack(side='left', padx=5)
+        self.schedule_btn = EnterpriseTheme.create_button(
+            button_frame,
+            "Create Event",
+            variant='primary',
+            command=self.schedule_event_from_form
+        )
+        self.schedule_btn.pack(side='right')
+        # Start disabled until required fields (Title) are present
+        try:
+            self.schedule_btn.state(['disabled'])
+        except Exception:
+            pass
+
+        cancel_btn = EnterpriseTheme.create_button(
+            button_frame,
+            "Cancel",
+            variant='secondary',
+            command=self.clear_form
+        )
+        cancel_btn.pack(side='right', padx=(0, 8))
+
+        draft_btn = EnterpriseTheme.create_button(
+            button_frame,
+            "Save as Draft",
+            variant='ghost',
+            command=self.clear_form
+        )
+        draft_btn.pack(side='right', padx=(0, 8))
+
+        # === CARD 3: Result Display ===
+        result_card = FluentCard(main_container, title="AI Response", padding=20)
+        result_card.pack(fill='both', expand=True)
 
         # Result display
-        self.result_text = scrolledtext.ScrolledText(self.parent, height=8, width=80)
-        self.result_text.pack(pady=10)
+        self.result_text = scrolledtext.ScrolledText(
+            result_card.body,
+            height=8,
+            font=('Consolas', 10),
+            bg=EnterpriseTheme.BACKGROUND['hover'],
+            fg=EnterpriseTheme.TEXT['primary'],
+            relief='flat',
+            borderwidth=0
+        )
+        self.result_text.pack(fill='both', expand=True)
+
+        # Keyboard shortcut: Ctrl+Enter to submit form quickly
+        try:
+            self.parent.bind_all('<Control-Return>', lambda e: self.schedule_event_from_form())
+        except Exception:
+            pass
+
+        # Enable/disable schedule button based on Title field
+        try:
+            title_entry = self.form_entries.get('title')
+            if title_entry:
+                title_entry.bind('<KeyRelease>', self._on_title_change)
+        except Exception:
+            pass
 
     def process_nl_input(self):
-        """Process natural language input and populate the form"""
+        """Process natural language input and populate the form (阿嚕米 style)
+
+        This method follows阿嚕米's design:
+        1. Parse natural language using Mock mode patterns
+        2. Auto-fill the form below
+        3. Show suggestion based on flexible/fixed time
+        """
         text = self.nl_input.get()
         if not text:
             return
 
-        self.update_status("Processing natural language input...")
+        self.update_status("🔍 正在解析自然語言...")
 
-        # Parse the input
+        # Parse the input using阿嚕米 Mock mode
         parsed = self.nlp_processor.parse_scheduling_request(text)
 
         # Clear result display
@@ -121,8 +323,8 @@ class QuickScheduleTab:
             # Handle check_schedule action - find optimal slot first
             self._handle_check_schedule_action(parsed)
         elif parsed['action'] == 'create':
-            # Display parsed information
-            self.result_text.insert(tk.END, "✅ Parsed Natural Language Input\n")
+            # Display parsed information (阿嚕米 style)
+            self.result_text.insert(tk.END, "✨ AI 解析結果\n")
             self.result_text.insert(tk.END, "=" * 60 + "\n\n")
 
             # Display parsed fields in a nicer format
@@ -140,9 +342,26 @@ class QuickScheduleTab:
                 event_type_str = parsed['event_type'].value if hasattr(parsed['event_type'], 'value') else str(parsed['event_type'])
                 self.result_text.insert(tk.END, f"  🏷️  Type: {event_type_str}\n")
 
+            # Determine if this is flexible or fixed time (阿嚕米 logic)
+            is_flexible = parsed.get('time_preference') is not None and not parsed.get('datetime')
+            has_exact_time = parsed.get('datetime') is not None
+
             self.result_text.insert(tk.END, "\n" + "=" * 60 + "\n")
-            self.result_text.insert(tk.END, "📝 Form populated with parsed data.\n")
-            self.result_text.insert(tk.END, "Please review and click 'Schedule Event' to confirm.\n")
+
+            if is_flexible:
+                # Flexible scheduling (阿嚕米 style message)
+                self.result_text.insert(tk.END, "✨ AI 建議：系統將自動避開衝突，為您找尋最佳空檔。\n")
+                self.result_text.insert(tk.END, f"   時段偏好：{parsed['time_preference'].get('period', 'N/A')}\n")
+                self.is_flexible_var.set(True)
+            elif has_exact_time:
+                # Fixed time (阿嚕米 style message)
+                self.result_text.insert(tk.END, "📍 AI 建議：此為固定行程，將排定於指定時間。\n")
+                self.is_flexible_var.set(False)
+            else:
+                # General case
+                self.result_text.insert(tk.END, "📝 表單已填充，請檢查後點擊「Schedule Event」確認。\n")
+
+            self.result_text.insert(tk.END, "\n下方表單已自動填充，請檢查後提交。\n")
 
             # Clear existing form data
             for entry in self.form_entries.values():
@@ -340,6 +559,10 @@ class QuickScheduleTab:
                     self.result_text.insert(tk.END, "\n✅ No conflicts detected.\n")
 
         self.update_status("Form populated - review and click 'Schedule Event'")
+        try:
+            self.result_text.see(tk.END)
+        except Exception:
+            pass
 
     def _handle_check_schedule_action(self, parsed):
         """Handle check_schedule action by finding optimal slot and populating form"""
@@ -484,10 +707,19 @@ class QuickScheduleTab:
     def schedule_event_from_form(self):
         """Schedule event from detailed form"""
         try:
+            # Disable schedule button to prevent double submissions
+            try:
+                self.schedule_btn.state(['disabled'])
+            except Exception:
+                pass
             # Collect form data
             title = self.form_entries['title'].get()
             if not title:
                 messagebox.showerror("Error", "Title is required")
+                try:
+                    self.schedule_btn.state(['!disabled'])
+                except Exception:
+                    pass
                 return
 
             # Parse date and time
@@ -550,6 +782,14 @@ class QuickScheduleTab:
             for entry in self.form_entries.values():
                 entry.delete(0, tk.END)
             self.tags_entry.delete(0, tk.END)
+            try:
+                self.result_text.see(tk.END)
+            except Exception:
+                pass
+            try:
+                self.schedule_btn.state(['!disabled'])
+            except Exception:
+                pass
 
         except Exception as e:
             messagebox.showerror("Error", str(e))
@@ -557,6 +797,10 @@ class QuickScheduleTab:
     def display_result(self, message):
         """Display result message"""
         self.result_text.insert(tk.END, f"\n{message}\n")
+        try:
+            self.result_text.see(tk.END)
+        except Exception:
+            pass
 
     def clear_nl_input(self):
         """Clear natural language input field"""
@@ -573,3 +817,18 @@ class QuickScheduleTab:
         self.is_flexible_var.set(True)
         self.result_text.delete(1.0, tk.END)
         self.result_text.insert(tk.END, "✅ Form cleared. Ready for new event.\n")
+        try:
+            self.schedule_btn.state(['disabled'])
+        except Exception:
+            pass
+
+    def _on_title_change(self, event=None):
+        """Enable schedule button only when title is not empty"""
+        try:
+            title = self.form_entries['title'].get().strip()
+            if title:
+                self.schedule_btn.state(['!disabled'])
+            else:
+                self.schedule_btn.state(['disabled'])
+        except Exception:
+            pass

@@ -56,6 +56,10 @@ echo "LLM_PROVIDER=openai" >> .env
 # Option C: Google Gemini (Free tier available)
 echo "GEMINI_API_KEY=your-gemini-key-here" >> .env
 echo "LLM_PROVIDER=gemini" >> .env
+
+# Option D: Groq (Fast & Free tier available)
+echo "GROQ_API_KEY=your-groq-key-here" >> .env
+echo "LLM_PROVIDER=groq" >> .env
 ```
 
 **Google Calendar**:
@@ -213,7 +217,7 @@ brew install python@3.12  # Includes tkinter
 ```bash
 python -m tkinter  # Should show a test window
 # OR
-python test_tkinter.py
+python -m tests.test_tkinter
 ```
 
 **IMPORTANT**: If you get "Can't find a usable init.tcl" or "Tcl isn't installed" error:

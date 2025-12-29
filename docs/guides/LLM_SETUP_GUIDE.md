@@ -1,6 +1,6 @@
 # 🤖 LLM Provider Setup Guide
 
-Your AI Schedule Agent now supports **multiple LLM providers**: Claude (Anthropic), OpenAI GPT, and Google Gemini. This guide will help you configure and use them.
+Your AI Schedule Agent now supports **multiple LLM providers**: Claude (Anthropic), OpenAI GPT, Google Gemini, and Groq. This guide will help you configure and use them.
 
 ---
 
@@ -11,11 +11,12 @@ Your AI Schedule Agent now supports **multiple LLM providers**: Claude (Anthropi
 | Provider | Best For | Cost | Setup Difficulty |
 |----------|----------|------|------------------|
 | **Claude 3.5 Sonnet** ⭐ | Best overall, excellent Chinese support | Moderate | Easy |
-| **OpenAI GPT-3.5** | Fastest, cheapest | Low | Easy |
+| **Groq (Llama 3.3)** 🚀 | Fastest inference, free tier | Free/Low | Easy |
+| **OpenAI GPT-3.5** | Reliable, fast | Low | Easy |
 | **OpenAI GPT-4** | Most accurate | High | Easy |
 | **Google Gemini Pro** | Free tier available, good alternative | Free/Low | Easy |
 
-**Recommendation**: Start with **Claude 3.5 Sonnet** (default) or **GPT-3.5-turbo** for cost-effectiveness.
+**Recommendation**: Start with **Claude 3.5 Sonnet** (default), **Groq** for speed and free tier, or **GPT-3.5-turbo** for cost-effectiveness.
 
 ---
 
@@ -48,6 +49,15 @@ Your AI Schedule Agent now supports **multiple LLM providers**: Claude (Anthropi
 
 **Pricing**: Free tier available (60 requests/minute), then $0.125/$0.375 per million tokens
 
+#### **For Groq** - FASTEST & FREE TIER
+
+1. Go to: https://console.groq.com/keys
+2. Sign up/login to Groq
+3. Click "Create API Key"
+4. Copy your key
+
+**Pricing**: Free tier available (generous limits), extremely fast inference with Llama models
+
 ---
 
 ### Step 3: Configure Your API Key
@@ -65,6 +75,11 @@ Your AI Schedule Agent now supports **multiple LLM providers**: Claude (Anthropi
    LLM_PROVIDER=claude
    ANTHROPIC_API_KEY=sk-ant-your-actual-key-here
    CLAUDE_MODEL=claude-3-5-sonnet-20241022
+
+   # OR for Groq (fastest, free tier)
+   LLM_PROVIDER=groq
+   GROQ_API_KEY=your-groq-api-key-here
+   GROQ_MODEL=llama-3.3-70b-versatile
 
    # OR for OpenAI
    LLM_PROVIDER=openai
@@ -97,6 +112,10 @@ Edit `.config/settings.json`:
     },
     "gemini": {
       "model": "gemini-pro",
+      "api_key": null
+    },
+    "groq": {
+      "model": "llama-3.3-70b-versatile",
       "api_key": null
     }
   }
