@@ -811,6 +811,7 @@ REASON: Free slot in afternoon, no conflicts, good spacing"""
             summary = m.group(1)
             logger.debug(f"阿嚕米 pattern (quoted): extracted title '{summary}'")
         else:
+
             # Pattern 2: Action keywords at start + content (enhanced pattern)
             # Examples: "安排明天下午3點面試" -> need to extract just "面試"
             # Match action keyword at the start, then extract just the event name
@@ -867,6 +868,7 @@ REASON: Free slot in afternoon, no conflicts, good spacing"""
                                         if action_time_pattern:
                                             summary = action_time_pattern.group(1).strip()
                                             logger.debug(f"Enhanced pattern (action+time+event): extracted title '{summary}'")
+
 
         if summary:
             # Clean up extracted title - remove action keywords and duration prefixes
@@ -971,6 +973,7 @@ REASON: Free slot in afternoon, no conflicts, good spacing"""
         # === 阿嚕米 Mock Mode: Single Time Extraction ===
         # Extract single time with relative date pattern (阿嚕米's exact pattern)
         if not result.get('datetime'):
+
             # Exact pattern from 阿嚕米: r'(今天|明天|後天|本週\S*|下週\S*).*?(\d{1,2})\s*點'
             m3 = re.search(r'(今天|明天|後天|本週\S*|下週\S*).*?(\d{1,2})\s*點', text)
             if m3:
@@ -1029,6 +1032,8 @@ REASON: Free slot in afternoon, no conflicts, good spacing"""
         # Log extracted fields for debugging
         extracted_fields = {k: v for k, v in result.items() if v is not None}
         logger.info(f"阿嚕米 Mock mode extraction complete: {extracted_fields}")
+
+
         return result
 
     def reset_conversation(self):

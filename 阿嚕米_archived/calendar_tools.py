@@ -9,13 +9,6 @@ logger = logging.getLogger("agent")
 # 專案提案中定義的時區
 TIMEZONE = 'Asia/Taipei' 
 
-def get_all_calendar_ids(service):
-    """獲取使用者清單中所有勾選的日曆 ID"""
-    calendar_list = service.calendarList().list().execute()
-    # 這裡過濾出在截圖中看到的那些日曆
-    return [item['id'] for item in calendar_list.get('items', [])]
-
-
 def create_calendar_event(summary: str, description: str, start_time_str: str, end_time_str: str, calendar_id: str = 'primary') -> str:
     """
     在 Google Calendar 中建立一個新活動。

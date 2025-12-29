@@ -2,12 +2,11 @@
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify
 from functools import wraps
 import os
-from datetime import datetime, timedelta
 
-# 確保引用路徑正確
+# 確保這些 import 正確指向你的檔案
 from calendar_tools import plan_week_schedule, get_calendar_service
 from calendar_service import TOKEN_FILE
-from calendar_time_parser import parse_with_ai 
+from calendar_time_parser import parse_with_ai  # 這是 AI 解析的核心
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
@@ -15,6 +14,7 @@ app.secret_key = os.urandom(24)
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
+        # 如果 Token 檔案存在，我們視為已登入
         if not os.path.exists(TOKEN_FILE):
             return redirect(url_for('login'))
         return f(*args, **kwargs)
@@ -29,9 +29,10 @@ def index():
 def login():
     if os.path.exists(TOKEN_FILE):
         os.remove(TOKEN_FILE)
-    get_calendar_service()
+    get_calendar_service()  # 觸發瀏覽器授權
     return redirect(url_for('index'))
 
+# --- 關鍵修正：新增 AI 解析 API 端點 ---
 @app.route('/api/parse_nl', methods=['POST'])
 def api_parse_nl():
     data = request.get_json()
@@ -49,7 +50,7 @@ def api_parse_nl():
         print("[PARSE_NL ERROR]", e)
         return jsonify({'error': '解析失敗'}), 500
 
-@app.route('/schedule', methods=['GET', 'POST'])
+@app.route('/schedule', methods=['POST'])
 @login_required
 def schedule():
     if request.method == 'POST':

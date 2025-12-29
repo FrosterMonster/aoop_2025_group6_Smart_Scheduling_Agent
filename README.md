@@ -96,7 +96,65 @@ The app features a beautiful, modern sidebar interface:
 
 **Switch UI modes:**
 ```bash
+<<<<<<< HEAD
+./setup.sh
+```
+
+This ensures everyone uses compatible Python packages for their system.
+
+### ⚠️ Do NOT Commit Credentials
+
+Your personal credentials in `.config/` are git-ignored:
+- `credentials.json` - Your Google API credentials
+- `token.pickle` - Your auth token
+- `user_profile.json` - Your preferences
+- `settings.json`, `paths.json` - Your config
+
+Only `.example` and `.template` files are shared via git.
+
+---
+
+## Project Structure
+
+```
+.
+├── setup.sh                # Complete setup script (run this first!)
+├── run.sh                  # Run the application
+├── main.py                 # Main application code
+├── requirements.txt        # Python dependencies
+│
+├── .config/                # Configuration (user-specific, git-ignored)
+│   ├── README.md           # Config documentation
+│   ├── *.example           # Templates (shared via git)
+│   ├── credentials.json    # YOUR Google credentials (not in git)
+│   └── settings.json       # YOUR settings (not in git)
+│
+├── Documentation files:
+│   ├── QUICKSTART.md       # Fast setup guide
+│   ├── NEW_USER_SETUP.md   # Detailed setup guide
+│   ├── WHAT_TO_MODIFY.md   # What files to edit
+│   └── TROUBLESHOOTING.md  # Common issues
+│
+└── venv/                   # YOUR virtual env (not in git, create with setup.sh)
+```
+
+---
+
+## For Team Members
+
+When you clone this repo:
+
+```bash
+# 1. Run setup
+./setup.sh
+
+# 2. Add your credentials
+cp ~/Downloads/your-credentials.json .config/credentials.json
+
+# 3. Run
+=======
 # Modern UI (default)
+>>>>>>> 2646380e138663d85d680e6d33fad2a7caaede3a
 ./run.sh
 
 # Classic UI
